@@ -1,0 +1,44 @@
+-- Run this once in the Supabase SQL editor for your project.
+
+create table if not exists traders (
+  address        text primary key,
+  display_name   text not null,
+  active         boolean default true,
+  added_at       timestamptz default now(),
+  pnl_30d_usd    numeric,
+  roi_30d_pct    numeric,
+  win_rate_pct   numeric,
+  account_value  numeric,
+  stats_updated_at timestamptz
+);
+
+-- One row per (telegram chat, coin) the chat wants alerts for.
+create table if not exists subscriptions (
+  chat_id  bigint not null,
+  coin     text not null,
+  created_at timestamptz default now(),
+  primary key (chat_id, coin)
+);
+
+-- Open position per trader+coin, used to compute entry price / hold time
+-- when a close fill arrives. Overwritten on every open/increase fill.
+create table if not exists open_positions (
+  trader_address text not null,
+  coin           text not null,
+  side           text not null,        -- 'long' or 'short'
+  entry_price    numeric not null,
+  size           numeric not null,
+  opened_at      timestamptz not null,
+  updated_at     timestamptz default now(),
+  primary key (trader_address, coin)
+);
+
+-- Dedup: Hyperliquid fill "tid" is unique per fill. We skip anything
+-- already processed (handles WS reconnect replay).
+create table if not exists seen_fills (
+  tid      bigint primary key,
+  seen_at  timestamptz default now()
+);
+
+create index if not exists idx_subscriptions_coin on subscriptions (coin);
+create index if not exists idx_traders_active on traders (active) where active = true;
