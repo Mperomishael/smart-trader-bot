@@ -1,48 +1,44 @@
 function fmtUsd(n) {
   const abs = Math.abs(n);
-  if (abs >= 1e6) return `${n < 0 ? '-' : ''}$${(abs / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${n < 0 ? '-' : ''}$${(abs / 1e3).toFixed(0)}K`;
-  return `${n < 0 ? '-' : ''}$${abs.toFixed(2)}`;
+  if (abs >= 1e6) return `${n < 0 ? '-' : ''}\[ {(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${n < 0 ? '-' : ''} \]{(abs / 1e3).toFixed(0)}K`;
+  return `${n < 0 ? '-' : ''}\[ {abs.toFixed(0)}`;
 }
 
 function fmtPrice(n) {
-  return `$${Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  return ` \]{Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 }
 
 function traderLink(address) {
   return `https://app.hyperliquid.xyz/explorer/address/${address}`;
 }
 
-function formatOpenAlert({ trader, coin, side, entryPrice, positionUsd, leverage }) {
+function formatOpenAlert({ trader, coin, side, entryPrice, positionUsd }) {
   const isLong = side === 'long';
-  const header = isLong ? 'BUY / LONG' : 'SELL / SHORT';
-  const pnlLine = trader.pnl_30d_usd != null ? `30D PnL: +${fmtUsd(trader.pnl_30d_usd)}\n` : '';
-  const winLine = trader.win_rate_pct != null ? `Win rate: ${trader.win_rate_pct}%\n` : '';
-  const levLine = leverage ? `Leverage: ${leverage}x\n` : '';
+  const action = isLong ? '🟢 BUY / LONG' : '🔴 SELL / SHORT';
+
   return (
-    `SMART MONEY ALERT\n` +
-    `${header} — ${coin}\n\n` +
-    `Trader: ${trader.display_name}\n` +
-    pnlLine +
-    winLine +
-    `Entry: ${fmtPrice(entryPrice)}\n` +
-    `Position: ${fmtUsd(positionUsd)}\n` +
-    levLine +
-    `${isLong ? 'Long' : 'Short'} ${coin}\n\n` +
-    `[View Trader](${traderLink(trader.address)})`
+    `🚨 *NEW TRADE ALERT*\n\n` +
+    `\( {action} — * \){coin}*\n\n` +
+    `👤 Trader: *${trader.display_name}*\n` +
+    `📈 30D Profit: *+${fmtUsd(trader.pnl_30d_usd || 0)}*\n` +
+    `🎯 Win rate: *${trader.win_rate_pct || '?'}%*\n\n` +
+    `💰 Entry: ${fmtPrice(entryPrice)}\n` +
+    `📦 Size: ${fmtUsd(positionUsd)}\n\n` +
+    `_A top trader just opened this position._`
   );
 }
 
 function formatCloseAlert({ trader, coin, entryPrice, exitPrice, pnlUsd, heldMs }) {
   const held = formatDuration(heldMs);
+  const profitEmoji = pnlUsd >= 0 ? '✅' : '❌';
+
   return (
-    `POSITION CLOSED\n` +
-    `${coin}\n\n` +
-    `Trader: ${trader.display_name}\n` +
-    `Entry: ${fmtPrice(entryPrice)}\n` +
-    `Exit: ${fmtPrice(exitPrice)}\n` +
-    `PnL: ${pnlUsd >= 0 ? '+' : ''}${fmtUsd(pnlUsd)}\n` +
-    `Held: ${held}`
+    `${profitEmoji} *POSITION CLOSED* — ${coin}\n\n` +
+    `👤 Trader: *${trader.display_name}*\n` +
+    `Entry → Exit: ${fmtPrice(entryPrice)} → ${fmtPrice(exitPrice)}\n` +
+    `PnL: *\( {pnlUsd >= 0 ? '+' : ''} \){fmtUsd(pnlUsd)}*\n` +
+    `⏱ Held: ${held}`
   );
 }
 
@@ -55,4 +51,4 @@ function formatDuration(ms) {
   return `${h}h ${m}m`;
 }
 
-module.exports = { formatOpenAlert, formatCloseAlert, fmtUsd, fmtPrice };
+module.exports = { formatOpenAlert, formatCloseAlert, fmtUsd, fmtPrice, traderLink };
