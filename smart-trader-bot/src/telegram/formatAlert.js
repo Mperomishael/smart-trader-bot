@@ -1,12 +1,13 @@
 function fmtUsd(n) {
-  const abs = Math.abs(n);
-  if (abs >= 1e6) return `${n < 0 ? '-' : ''}\[ {(abs / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${n < 0 ? '-' : ''} \]{(abs / 1e3).toFixed(0)}K`;
-  return `${n < 0 ? '-' : ''}\[ {abs.toFixed(0)}`;
+  const num = Number(n) || 0;
+  const abs = Math.abs(num);
+  if (abs >= 1e6) return (num < 0 ? '-' : '') + '$' + (abs / 1e6).toFixed(2) + 'M';
+  if (abs >= 1e3) return (num < 0 ? '-' : '') + '$' + (abs / 1e3).toFixed(0) + 'K';
+  return (num < 0 ? '-' : '') + '$' + abs.toFixed(0);
 }
 
 function fmtPrice(n) {
-  return ` \]{Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 function traderLink(address) {
@@ -19,7 +20,7 @@ function formatOpenAlert({ trader, coin, side, entryPrice, positionUsd }) {
 
   return (
     `🚨 *NEW TRADE ALERT*\n\n` +
-    `\( {action} — * \){coin}*\n\n` +
+    `${action} — *${coin}*\n\n` +
     `👤 Trader: *${trader.display_name}*\n` +
     `📈 30D Profit: *+${fmtUsd(trader.pnl_30d_usd || 0)}*\n` +
     `🎯 Win rate: *${trader.win_rate_pct || '?'}%*\n\n` +
@@ -37,7 +38,7 @@ function formatCloseAlert({ trader, coin, entryPrice, exitPrice, pnlUsd, heldMs 
     `${profitEmoji} *POSITION CLOSED* — ${coin}\n\n` +
     `👤 Trader: *${trader.display_name}*\n` +
     `Entry → Exit: ${fmtPrice(entryPrice)} → ${fmtPrice(exitPrice)}\n` +
-    `PnL: *\( {pnlUsd >= 0 ? '+' : ''} \){fmtUsd(pnlUsd)}*\n` +
+    `PnL: *${pnlUsd >= 0 ? '+' : ''}${fmtUsd(pnlUsd)}*\n` +
     `⏱ Held: ${held}`
   );
 }
