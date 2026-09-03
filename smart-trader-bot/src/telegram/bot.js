@@ -19,7 +19,7 @@ function createBot() {
   };
 
   // ========== START / WELCOME ==========
-  bot.onText(/^\/start/, async (msg) => {
+  bot.onText(/^\/start$/, async (msg) => {
     const text =
       `👋 *Welcome to Smart Trader Bot*\n\n` +
       `I watch the *Top 10 most profitable traders* on Hyperliquid and send you *instant alerts* the moment they open or close a trade.\n\n` +
@@ -33,7 +33,7 @@ function createBot() {
   });
 
   // ========== TOP 10 TRADERS ==========
-  bot.onText(/🏆 Top 10 Traders|\/traders/, async (msg) => {
+  bot.onText(/^🏆 Top 10 Traders$|^\/traders$/, async (msg) => {
     const traders = await db.getActiveTraders();
 
     if (!traders.length) {
@@ -48,7 +48,7 @@ function createBot() {
 
     sorted.forEach((t, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-      text += `\( {medal} * \){t.display_name}*\n`;
+      text += `${medal} *${t.display_name}*\n`;
       text += `   +${fmtUsd(t.pnl_30d_usd)}  •  ${t.win_rate_pct}% win rate\n\n`;
     });
 
@@ -82,7 +82,7 @@ function createBot() {
   });
 
   // ========== LIVE SIGNALS ==========
-  bot.onText(/🔥 Live Signals|\/signals/, async (msg) => {
+  bot.onText(/^🔥 Live Signals$|^\/signals$/, async (msg) => {
     const traders = await db.getActiveTraders();
 
     if (!traders.length) {
@@ -100,7 +100,7 @@ function createBot() {
 
     sorted.forEach((t, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-      text += `\( {medal} * \){t.display_name}*\n`;
+      text += `${medal} *${t.display_name}*\n`;
       text += `   Profit: +${fmtUsd(t.pnl_30d_usd)}  •  Win rate: ${t.win_rate_pct}%\n\n`;
     });
 
@@ -125,7 +125,7 @@ function createBot() {
   });
 
   // ========== HOW IT WORKS ==========
-  bot.onText(/📖 How it works/, async (msg) => {
+  bot.onText(/^📖 How it works$/, async (msg) => {
     const text =
       `📖 *How this bot works* (simple version)\n\n` +
       `1️⃣ Every 15 minutes we scan Hyperliquid and pick the *10 traders* who made the most money in the last 30 days and have a high win rate.\n\n` +
@@ -148,7 +148,7 @@ function createBot() {
   });
 
   // ========== MY FOLLOWING ==========
-  bot.onText(/📋 My Following/, async (msg) => {
+  bot.onText(/^📋 My Following$/, async (msg) => {
     await showMyFollowing(bot, msg.chat.id);
   });
 
@@ -190,7 +190,9 @@ function createBot() {
       // Show / Refresh Top 10
       if (data === 'show_traders' || data === 'refresh_traders') {
         await bot.answerCallbackQuery(query.id);
-        bot.emit('text', { chat: { id: chatId }, text: '🏆 Top 10 Traders' });
+        // Manually trigger the Top 10 handler
+        const fakeMsg = { chat: { id: chatId }, text: '🏆 Top 10 Traders' };
+        bot.emit('text', fakeMsg);
       }
 
       // My Following
@@ -260,7 +262,7 @@ function createBot() {
     // Unfollow buttons
     const buttons = traderAddresses.map((addr) => {
       const short = addr.slice(0, 6) + '…' + addr.slice(-4);
-      return [{ text: `❌ Unfollow \( {short}`, callback_data: `unfollow_trader: \){addr}` }];
+      return [{ text: `❌ Unfollow ${short}`, callback_data: `unfollow_trader:${addr}` }];
     });
 
     await botInstance.sendMessage(chatId, text, {
