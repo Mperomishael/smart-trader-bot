@@ -3,7 +3,7 @@ const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = require('../config');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// ---- traders -------------------------------------------------------------
+// ---- traders ----
 async function upsertTraders(traders) {
   if (!traders.length) return;
   const { error } = await supabase.from('traders').upsert(traders, { onConflict: 'address' });
@@ -33,7 +33,7 @@ async function getTrader(address) {
   return data;
 }
 
-// ---- coin subscriptions --------------------------------------------------
+// ---- coin subscriptions ----
 async function follow(chatId, coin) {
   const { error } = await supabase.from('subscriptions').upsert({ chat_id: chatId, coin });
   if (error) throw error;
@@ -56,7 +56,7 @@ async function getSubscribersForCoin(coin) {
   return (data || []).map((r) => r.chat_id);
 }
 
-// ---- trader subscriptions ------------------------------------------
+// ---- trader subscriptions ----
 async function followTrader(chatId, traderAddress) {
   const { error } = await supabase
     .from('trader_subscriptions')
@@ -91,7 +91,7 @@ async function getSubscribersForTrader(traderAddress) {
   return (data || []).map((r) => r.chat_id);
 }
 
-// ---- open positions ------------------------------------------------------
+// ---- open positions ----
 async function getOpenPosition(traderAddress, coin) {
   const { data, error } = await supabase
     .from('open_positions')
@@ -119,7 +119,7 @@ async function clearOpenPosition(traderAddress, coin) {
   if (error) throw error;
 }
 
-// ---- fill dedup ----------------------------------------------------------
+// ---- fill dedup ----
 async function isFillSeen(tid) {
   const { data, error } = await supabase.from('seen_fills').select('tid').eq('tid', tid).maybeSingle();
   if (error) throw error;
