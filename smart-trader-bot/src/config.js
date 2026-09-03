@@ -16,12 +16,12 @@ module.exports = {
   HYPERLIQUID_LEADERBOARD_URL:
     process.env.HYPERLIQUID_LEADERBOARD_URL || 'https://stats-data.hyperliquid.xyz/Mainnet/leaderboard',
 
-  // Trader-selection thresholds used when refreshing the tracked-trader list.
-  MIN_PNL_30D_USD: Number(process.env.MIN_PNL_30D_USD || 50000),
-  MIN_WIN_RATE_PCT: Number(process.env.MIN_WIN_RATE_PCT || 55),
-  MIN_ACCOUNT_VALUE_USD: Number(process.env.MIN_ACCOUNT_VALUE_USD || 100000),
-  MAX_TRACKED_TRADERS: Number(process.env.MAX_TRACKED_TRADERS || 40),
+  // Strict Top 10 settings
+  MIN_PNL_30D_USD: Number(process.env.MIN_PNL_30D_USD || 100000),
+  MIN_WIN_RATE_PCT: Number(process.env.MIN_WIN_RATE_PCT || 60),
+  MIN_ACCOUNT_VALUE_USD: Number(process.env.MIN_ACCOUNT_VALUE_USD || 250000),
+  MAX_TRACKED_TRADERS: Number(process.env.MAX_TRACKED_TRADERS || 10),
 
-  // How often (ms) to re-pull the leaderboard and recompute win rates.
-  TRADER_REFRESH_INTERVAL_MS: Number(process.env.TRADER_REFRESH_INTERVAL_MS || 30 * 60 * 1000),
+  // Refresh leaderboard every 15 minutes
+  TRADER_REFRESH_INTERVAL_MS: Number(process.env.TRADER_REFRESH_INTERVAL_MS || 15 * 60 * 1000),
 };
