@@ -7,8 +7,6 @@ const {
   MAX_TRACKED_TRADERS,
 } = require('../config');
 
-// Hyperliquid's public (undocumented but stable) leaderboard feed - the same
-// data that powers app.hyperliquid.xyz/leaderboard. GET, no auth required.
 async function fetchLeaderboard() {
   const res = await fetch(HYPERLIQUID_LEADERBOARD_URL);
   if (!res.ok) throw new Error(`Leaderboard fetch failed: ${res.status}`);
@@ -16,9 +14,6 @@ async function fetchLeaderboard() {
   return data.leaderboardRows || data;
 }
 
-// Win rate isn't in the leaderboard feed, so we derive it from a trader's
-// recent closed fills: wins / (wins + losses), ignoring zero-PnL fills
-// (opens, funding-only events, etc).
 async function computeWinRate(address) {
   const res = await fetch(HYPERLIQUID_INFO_URL, {
     method: 'POST',
@@ -32,12 +27,12 @@ async function computeWinRate(address) {
   let losses = 0;
   for (const f of fills) {
     const pnl = Number(f.closedPnl);
-    if (!pnl) continue; // opens and non-closing fills report 0
+    if (!pnl) continue;
     if (pnl > 0) wins += 1;
     else losses += 1;
   }
   const total = wins + losses;
-  if (total < 5) return null; // not enough closed trades to be meaningful
+  if (total < 5) return null;
   return Number(((wins / total) * 100).toFixed(1));
 }
 
@@ -46,17 +41,25 @@ function pickWindow(row, window) {
   return perf ? perf[1] : null;
 }
 
-// Pulls the leaderboard, filters to traders who clear the configured bar,
-// enriches survivors with a computed win rate, and returns rows shaped for
-// the `traders` table.
+function makeDisplayName(row, address) {
+  // Prefer official displayName from Hyperliquid
+  if (row.displayName && row.displayName.trim()) {
+    return row.displayName.trim().slice(0, 24);
+  }
+  // Fallback: short readable address
+  return `Trader \( {address.slice(0, 6)}… \){address.slice(-4)}`;
+}
+
 async function buildQualifiedTraderList() {
   const rows = await fetchLeaderboard();
 
   const candidates = rows
     .map((row) => {
       const month = pickWindow(row, 'month');
+      const address = row.ethAddress || row.address;
       return {
-        address: row.ethAddress || row.address,
+        address,
+        displayName: makeDisplayName(row, address),
         accountValue: Number(row.accountValue),
         pnl30d: month ? Number(month.pnl) : null,
         roi30d: month ? Number(month.roi) * 100 : null,
@@ -70,15 +73,16 @@ async function buildQualifiedTraderList() {
         c.accountValue >= MIN_ACCOUNT_VALUE_USD
     )
     .sort((a, b) => b.pnl30d - a.pnl30d)
-    .slice(0, MAX_TRACKED_TRADERS * 2); // over-fetch; win-rate filter trims further
+    .slice(0, MAX_TRACKED_TRADERS * 3);
 
   const qualified = [];
   for (const c of candidates) {
     const winRate = await computeWinRate(c.address);
     if (winRate === null || winRate < MIN_WIN_RATE_PCT) continue;
+
     qualified.push({
       address: c.address,
-      display_name: `Trader ${c.address.slice(0, 6)}`,
+      display_name: c.displayName,
       active: true,
       pnl_30d_usd: c.pnl30d,
       roi_30d_pct: c.roi30d,
@@ -86,6 +90,7 @@ async function buildQualifiedTraderList() {
       account_value: c.accountValue,
       stats_updated_at: new Date().toISOString(),
     });
+
     if (qualified.length >= MAX_TRACKED_TRADERS) break;
   }
   return qualified;
