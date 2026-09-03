@@ -12,10 +12,12 @@ async function upsertTraders(traders) {
 
 async function deactivateTradersNotIn(addresses) {
   if (!addresses.length) return;
+
   const { error } = await supabase
     .from('traders')
     .update({ active: false })
-    .not('address', 'in', `(\( {addresses.map((a) => `" \){a}"`).join(',')})`);
+    .not('address', 'in', `(${addresses.map((a) => `"${a}"`).join(',')})`);
+
   if (error) throw error;
 }
 
@@ -54,7 +56,7 @@ async function getSubscribersForCoin(coin) {
   return (data || []).map((r) => r.chat_id);
 }
 
-// ---- trader subscriptions (NEW) ------------------------------------------
+// ---- trader subscriptions ------------------------------------------
 async function followTrader(chatId, traderAddress) {
   const { error } = await supabase
     .from('trader_subscriptions')
