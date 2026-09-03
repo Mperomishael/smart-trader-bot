@@ -6,7 +6,7 @@ const { fmtUsd } = require('./formatAlert');
 function createBot() {
   const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
-  // ========== MAIN MENU ==========
+  // ========== MAIN MENU KEYBOARD ==========
   const mainMenu = {
     reply_markup: {
       keyboard: [
@@ -18,26 +18,12 @@ function createBot() {
     }
   };
 
-  // ========== START / WELCOME ==========
-  bot.onText(/^\/start$/, async (msg) => {
-    const text =
-      `👋 *Welcome to Smart Trader Bot*\n\n` +
-      `I watch the *Top 10 most profitable traders* on Hyperliquid and send you *instant alerts* the moment they open or close a trade.\n\n` +
-      `No complicated charts. Just copy what the best performers are doing.\n\n` +
-      `Tap a button below to get started:`;
-
-    await bot.sendMessage(msg.chat.id, text, {
-      parse_mode: 'Markdown',
-      ...mainMenu
-    });
-  });
-
-  // ========== TOP 10 TRADERS ==========
-  bot.onText(/^🏆 Top 10 Traders$|^\/traders$/, async (msg) => {
+  // ========== HELPER FUNCTIONS ==========
+  async function sendTop10(chatId) {
     const traders = await db.getActiveTraders();
 
     if (!traders.length) {
-      return bot.sendMessage(msg.chat.id, 'No traders loaded yet. Please wait a minute and try again.', mainMenu);
+      return bot.sendMessage(chatId, 'No traders loaded yet. Please wait a minute and try again.', mainMenu);
     }
 
     const sorted = traders
@@ -52,7 +38,6 @@ function createBot() {
       text += `   +${fmtUsd(t.pnl_30d_usd)}  •  ${t.win_rate_pct}% win rate\n\n`;
     });
 
-    // Follow buttons (2 per row)
     const buttons = [];
     for (let i = 0; i < sorted.length; i += 2) {
       const row = [];
@@ -74,19 +59,18 @@ function createBot() {
       { text: '🔄 Refresh', callback_data: 'refresh_traders' }
     ]);
 
-    await bot.sendMessage(msg.chat.id, text, {
+    await bot.sendMessage(chatId, text, {
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: buttons },
       ...mainMenu
     });
-  });
+  }
 
-  // ========== LIVE SIGNALS ==========
-  bot.onText(/^🔥 Live Signals$|^\/signals$/, async (msg) => {
+  async function sendLiveSignals(chatId) {
     const traders = await db.getActiveTraders();
 
     if (!traders.length) {
-      return bot.sendMessage(msg.chat.id, 'No traders are being tracked yet.\nPlease wait a moment and try again.', mainMenu);
+      return bot.sendMessage(chatId, 'No traders are being tracked yet.\nPlease wait a moment and try again.', mainMenu);
     }
 
     const sorted = traders
@@ -112,30 +96,26 @@ function createBot() {
         { text: '🏆 Full Top 10', callback_data: 'show_traders' },
         { text: '📋 My Following', callback_data: 'my_following' }
       ],
-      [
-        { text: '➕ Follow All Top 10', callback_data: 'follow_all_top' }
-      ]
+      [{ text: '➕ Follow All Top 10', callback_data: 'follow_all_top' }]
     ];
 
-    await bot.sendMessage(msg.chat.id, text, {
+    await bot.sendMessage(chatId, text, {
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: buttons },
       ...mainMenu
     });
-  });
+  }
 
-  // ========== HOW IT WORKS ==========
-  bot.onText(/^📖 How it works$/, async (msg) => {
+  async function sendHowItWorks(chatId) {
     const text =
-      `📖 *How this bot works* (simple version)\n\n` +
-      `1️⃣ Every 15 minutes we scan Hyperliquid and pick the *10 traders* who made the most money in the last 30 days and have a high win rate.\n\n` +
+      `📖 *How this bot works*\n\n` +
+      `1️⃣ Every 15 minutes we scan Hyperliquid and pick the *Top 10* traders with highest profit + high win rate.\n\n` +
       `2️⃣ We watch those 10 traders *24/7* in real time.\n\n` +
-      `3️⃣ The second any of them opens, closes, or flips a position → *you get a notification instantly*.\n\n` +
-      `4️⃣ You can follow the whole list or only the traders you like.\n\n` +
-      `No indicators. No complicated analysis. Just copy smart money.\n\n` +
-      `Ready?`;
+      `3️⃣ The second any of them opens or closes a trade → you get an instant notification.\n\n` +
+      `4️⃣ You can follow individual traders or all of them.\n\n` +
+      `Just copy what the smart money is doing.`;
 
-    await bot.sendMessage(msg.chat.id, text, {
+    await bot.sendMessage(chatId, text, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
@@ -145,96 +125,9 @@ function createBot() {
       },
       ...mainMenu
     });
-  });
+  }
 
-  // ========== MY FOLLOWING ==========
-  bot.onText(/^📋 My Following$/, async (msg) => {
-    await showMyFollowing(bot, msg.chat.id);
-  });
-
-  // ========== CALLBACK HANDLERS ==========
-  bot.on('callback_query', async (query) => {
-    const chatId = query.message.chat.id;
-    const data = query.data;
-
-    try {
-      // Follow a specific trader
-      if (data.startsWith('follow_trader:')) {
-        const address = data.split(':')[1];
-        const trader = await db.getTrader(address);
-
-        if (!trader) {
-          await bot.answerCallbackQuery(query.id, { text: 'Trader not found' });
-          return;
-        }
-
-        await db.followTrader(chatId, address);
-        await bot.answerCallbackQuery(query.id, { text: `Now following ${trader.display_name}` });
-
-        await bot.sendMessage(
-          chatId,
-          `✅ You are now following *${trader.display_name}*\n\n` +
-          `You will get an instant alert every time they open or close a trade.`,
-          { parse_mode: 'Markdown' }
-        );
-      }
-
-      // Unfollow a specific trader
-      if (data.startsWith('unfollow_trader:')) {
-        const address = data.split(':')[1];
-        await db.unfollowTrader(chatId, address);
-        await bot.answerCallbackQuery(query.id, { text: 'Unfollowed' });
-        await showMyFollowing(bot, chatId);
-      }
-
-      // Show / Refresh Top 10
-      if (data === 'show_traders' || data === 'refresh_traders') {
-        await bot.answerCallbackQuery(query.id);
-        // Manually trigger the Top 10 handler
-        const fakeMsg = { chat: { id: chatId }, text: '🏆 Top 10 Traders' };
-        bot.emit('text', fakeMsg);
-      }
-
-      // My Following
-      if (data === 'my_following') {
-        await bot.answerCallbackQuery(query.id);
-        await showMyFollowing(bot, chatId);
-      }
-
-      // Follow All Top 10
-      if (data === 'follow_all_top') {
-        const traders = await db.getActiveTraders();
-
-        if (!traders.length) {
-          await bot.answerCallbackQuery(query.id, { text: 'No traders available right now' });
-          return;
-        }
-
-        let count = 0;
-        for (const t of traders) {
-          await db.followTrader(chatId, t.address);
-          count++;
-        }
-
-        await bot.answerCallbackQuery(query.id, { text: `Following ${count} traders!` });
-
-        await bot.sendMessage(
-          chatId,
-          `✅ *Done!*\n\n` +
-          `You are now following all *Top ${count}* traders.\n\n` +
-          `You will receive an instant alert the second any of them opens or closes a trade.`,
-          { parse_mode: 'Markdown' }
-        );
-      }
-
-    } catch (err) {
-      console.error('[callback error]', err);
-      await bot.answerCallbackQuery(query.id, { text: 'Something went wrong. Please try again.' });
-    }
-  });
-
-  // ========== HELPER: Show what the user is following ==========
-  async function showMyFollowing(botInstance, chatId) {
+  async function showMyFollowing(chatId) {
     const [coins, traderAddresses] = await Promise.all([
       db.getFollowedCoins(chatId),
       db.getFollowedTraders(chatId)
@@ -259,17 +152,129 @@ function createBot() {
       text += `_You are not following anyone yet._\n\nTap *🏆 Top 10 Traders* to start.`;
     }
 
-    // Unfollow buttons
     const buttons = traderAddresses.map((addr) => {
       const short = addr.slice(0, 6) + '…' + addr.slice(-4);
       return [{ text: `❌ Unfollow ${short}`, callback_data: `unfollow_trader:${addr}` }];
     });
 
-    await botInstance.sendMessage(chatId, text, {
+    await bot.sendMessage(chatId, text, {
       parse_mode: 'Markdown',
-      reply_markup: buttons.length > 0 ? { inline_keyboard: buttons } : undefined
+      reply_markup: buttons.length > 0 ? { inline_keyboard: buttons } : undefined,
+      ...mainMenu
     });
   }
+
+  // ========== MESSAGE HANDLER (more reliable) ==========
+  bot.on('message', async (msg) => {
+    if (!msg.text) return;
+
+    const chatId = msg.chat.id;
+    const text = msg.text.trim();
+
+    try {
+      if (text === '/start') {
+        await bot.sendMessage(chatId,
+          `👋 *Welcome to Smart Trader Bot*\n\n` +
+          `I watch the *Top 10 most profitable traders* on Hyperliquid and send you *instant alerts* the moment they open or close a trade.\n\n` +
+          `Tap a button below to get started:`,
+          { parse_mode: 'Markdown', ...mainMenu }
+        );
+        return;
+      }
+
+      if (text === '🏆 Top 10 Traders' || text === '/traders') {
+        await sendTop10(chatId);
+        return;
+      }
+
+      if (text === '🔥 Live Signals' || text === '/signals') {
+        await sendLiveSignals(chatId);
+        return;
+      }
+
+      if (text === '📖 How it works') {
+        await sendHowItWorks(chatId);
+        return;
+      }
+
+      if (text === '📋 My Following') {
+        await showMyFollowing(chatId);
+        return;
+      }
+
+    } catch (err) {
+      console.error('[message handler error]', err);
+      await bot.sendMessage(chatId, 'Something went wrong. Please try again.');
+    }
+  });
+
+  // ========== CALLBACK HANDLERS ==========
+  bot.on('callback_query', async (query) => {
+    const chatId = query.message.chat.id;
+    const data = query.data;
+
+    try {
+      if (data.startsWith('follow_trader:')) {
+        const address = data.split(':')[1];
+        const trader = await db.getTrader(address);
+
+        if (!trader) {
+          await bot.answerCallbackQuery(query.id, { text: 'Trader not found' });
+          return;
+        }
+
+        await db.followTrader(chatId, address);
+        await bot.answerCallbackQuery(query.id, { text: `Following ${trader.display_name}` });
+        await bot.sendMessage(chatId,
+          `✅ You are now following *${trader.display_name}*\n\nYou will get an alert every time they trade.`,
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+
+      if (data.startsWith('unfollow_trader:')) {
+        const address = data.split(':')[1];
+        await db.unfollowTrader(chatId, address);
+        await bot.answerCallbackQuery(query.id, { text: 'Unfollowed' });
+        await showMyFollowing(chatId);
+        return;
+      }
+
+      if (data === 'show_traders' || data === 'refresh_traders') {
+        await bot.answerCallbackQuery(query.id);
+        await sendTop10(chatId);
+        return;
+      }
+
+      if (data === 'my_following') {
+        await bot.answerCallbackQuery(query.id);
+        await showMyFollowing(chatId);
+        return;
+      }
+
+      if (data === 'follow_all_top') {
+        const traders = await db.getActiveTraders();
+        if (!traders.length) {
+          await bot.answerCallbackQuery(query.id, { text: 'No traders available' });
+          return;
+        }
+
+        for (const t of traders) {
+          await db.followTrader(chatId, t.address);
+        }
+
+        await bot.answerCallbackQuery(query.id, { text: `Following ${traders.length} traders!` });
+        await bot.sendMessage(chatId,
+          `✅ You are now following all *Top ${traders.length}* traders.\n\nYou will receive instant alerts.`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
+    } catch (err) {
+      console.error('[callback error]', err);
+      await bot.answerCallbackQuery(query.id, { text: 'Error occurred' });
+    }
+  });
 
   bot.on('polling_error', (err) => console.error('[telegram] polling error:', err.message));
 
