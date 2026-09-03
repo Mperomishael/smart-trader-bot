@@ -6,18 +6,22 @@ const { processFill } = require('./src/alertEngine');
 const { refreshTraders } = require('./scripts/refreshTraders');
 
 async function main() {
-  console.log('[boot] refreshing tracked trader list...');
+  console.log('[boot] Smart Trader Bot starting...');
+  console.log('[boot] Refreshing Top 10 traders list...');
+
+  // First refresh (non-fatal if it fails)
   await refreshTraders().catch((err) => {
-    // Non-fatal on boot - fall back to whatever's already in the DB.
-    console.error('[boot] trader refresh failed, continuing with existing list:', err.message);
+    console.error('[boot] Initial trader refresh failed, continuing with existing list:', err.message);
   });
 
   const traders = await db.getActiveTraders();
   const addresses = traders.map((t) => t.address);
-  console.log(`[boot] tracking ${addresses.length} traders`);
+  console.log(`[boot] Tracking ${addresses.length} top traders`);
 
+  // Create Telegram bot
   const bot = createBot();
 
+  // Start real-time fill listener
   const listener = new FillListener(addresses, (fill, traderAddress) => {
     processFill(fill, traderAddress, bot).catch((err) =>
       console.error('[alert-engine] failed processing fill:', err.message)
@@ -25,27 +29,27 @@ async function main() {
   });
   listener.start();
 
-  // Periodically re-pull the leaderboard, recompute win rates, and
-  // re-subscribe the WS connection to any newly qualified/disqualified traders.
+  // Periodically refresh the Top 10 list (every 15 min by default)
   setInterval(async () => {
     try {
+      console.log('[refresh] Updating Top 10 traders...');
       const newAddresses = await refreshTraders();
       listener.updateAddresses(newAddresses);
-      console.log(`[refresh] now tracking ${newAddresses.length} traders`);
+      console.log(`[refresh] Now tracking ${newAddresses.length} traders`);
     } catch (err) {
       console.error('[refresh] failed:', err.message);
     }
   }, TRADER_REFRESH_INTERVAL_MS);
 
-  // Keep the fill-dedup table from growing forever.
+  // Clean old fill records every 6 hours
   setInterval(() => {
     db.pruneOldFills().catch((err) => console.error('[prune] failed:', err.message));
   }, 6 * 3600 * 1000);
 
-  console.log('[boot] smart-trader-bot running');
+  console.log('[boot] ✅ Smart Trader Bot is live and listening for trades');
 }
 
 main().catch((err) => {
-  console.error('[boot] fatal:', err);
+  console.error('[boot] Fatal error:', err);
   process.exit(1);
 });
