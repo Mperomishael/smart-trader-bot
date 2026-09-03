@@ -42,12 +42,10 @@ function pickWindow(row, window) {
 }
 
 function makeDisplayName(row, address) {
-  // Prefer official displayName from Hyperliquid
   if (row.displayName && row.displayName.trim()) {
     return row.displayName.trim().slice(0, 24);
   }
-  // Fallback: short readable address
-  return `Trader \( {address.slice(0, 6)}… \){address.slice(-4)}`;
+  return `Trader ${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
 async function buildQualifiedTraderList() {
