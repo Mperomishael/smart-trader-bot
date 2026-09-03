@@ -10,23 +10,29 @@ function fmtPrice(n) {
   return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
-function traderLink(address) {
-  return `https://app.hyperliquid.xyz/explorer/address/${address}`;
+function formatTime(timestamp) {
+  const date = new Date(timestamp);
+  return date.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
 }
 
-function formatOpenAlert({ trader, coin, side, entryPrice, positionUsd }) {
+function formatOpenAlert({ trader, coin, side, entryPrice, positionUsd, time }) {
   const isLong = side === 'long';
   const action = isLong ? '🟢 BUY / LONG' : '🔴 SELL / SHORT';
+  const sideText = isLong ? 'LONG' : 'SHORT';
 
   return (
-    `🚨 *NEW TRADE ALERT*\n\n` +
+    `🚨 *NEW TRADE SIGNAL*\n\n` +
     `${action} — *${coin}*\n\n` +
     `👤 Trader: *${trader.display_name}*\n` +
     `📈 30D Profit: *+${fmtUsd(trader.pnl_30d_usd || 0)}*\n` +
-    `🎯 Win rate: *${trader.win_rate_pct || '?'}%*\n\n` +
-    `💰 Entry: ${fmtPrice(entryPrice)}\n` +
-    `📦 Size: ${fmtUsd(positionUsd)}\n\n` +
-    `_A top trader just opened this position._`
+    `🎯 Win Rate: *${trader.win_rate_pct || '?'}%*\n\n` +
+    `💰 Entry Price: *${fmtPrice(entryPrice)}*\n` +
+    `📦 Position Size: *${fmtUsd(positionUsd)}*\n` +
+    `🕒 Time: ${formatTime(time)}\n\n` +
+    `📋 *COPY SIGNAL:*\n` +
+    `Pair: ${coin}\n` +
+    `Side: ${sideText}\n` +
+    `Entry: ${Number(entryPrice).toFixed(2)}`
   );
 }
 
@@ -52,4 +58,9 @@ function formatDuration(ms) {
   return `${h}h ${m}m`;
 }
 
-module.exports = { formatOpenAlert, formatCloseAlert, fmtUsd, fmtPrice, traderLink };
+module.exports = {
+  formatOpenAlert,
+  formatCloseAlert,
+  fmtUsd,
+  fmtPrice
+};
