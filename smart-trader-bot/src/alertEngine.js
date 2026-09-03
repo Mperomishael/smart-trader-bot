@@ -36,8 +36,13 @@ async function processFill(fill, traderAddress, bot) {
       opened_at: new Date(fill.time).toISOString(),
     });
     await broadcast(bot, coin, traderAddress, formatOpenAlert({
-      trader, coin, side: info.side, entryPrice: px, positionUsd
-    }), trader);
+  trader,
+  coin,
+  side: info.side,
+  entryPrice: px,
+  positionUsd,
+  time: fill.time
+}), trader);
     return;
   }
 
@@ -75,8 +80,13 @@ async function processFill(fill, traderAddress, bot) {
       opened_at: new Date(fill.time).toISOString(),
     });
     await broadcast(bot, coin, traderAddress, formatOpenAlert({
-      trader, coin, side: info.to, entryPrice: px, positionUsd
-    }), trader);
+  trader,
+  coin,
+  side: info.side,
+  entryPrice: px,
+  positionUsd,
+  time: fill.time
+}), trader);
   }
 }
 
@@ -90,13 +100,16 @@ async function broadcast(bot, coin, traderAddress, message, trader) {
   const allChatIds = [...new Set([...coinSubs, ...traderSubs])];
 
   const keyboard = {
-    inline_keyboard: [
-      [
-        { text: '🔍 View Trader', url: `https://app.hyperliquid.xyz/explorer/address/${traderAddress}` },
-        { text: '➕ Follow this trader', callback_data: `follow_trader:${traderAddress}` }
-      ]
+  inline_keyboard: [
+    [
+      { text: '🔍 View Trader', url: `https://app.hyperliquid.xyz/explorer/address/${traderAddress}` },
+      { text: '➕ Follow Trader', callback_data: `follow_trader:${traderAddress}` }
+    ],
+    [
+      { text: '📋 Copy Signal', callback_data: `copy_signal:${coin}:${info?.side || 'long'}:${px}` }
     ]
-  };
+  ]
+};
 
   await Promise.all(
     allChatIds.map((chatId) =>
