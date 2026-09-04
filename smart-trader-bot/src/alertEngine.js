@@ -36,13 +36,13 @@ async function processFill(fill, traderAddress, bot) {
       opened_at: new Date(fill.time).toISOString(),
     });
     await broadcast(bot, coin, traderAddress, formatOpenAlert({
-  trader,
-  coin,
-  side: info.side,
-  entryPrice: px,
-  positionUsd,
-  time: fill.time
-}), trader);
+      trader,
+      coin,
+      side: info.side,
+      entryPrice: px,
+      positionUsd,
+      time: fill.time
+    }), trader, { side: info.side, px });
     return;
   }
 
@@ -80,17 +80,17 @@ async function processFill(fill, traderAddress, bot) {
       opened_at: new Date(fill.time).toISOString(),
     });
     await broadcast(bot, coin, traderAddress, formatOpenAlert({
-  trader,
-  coin,
-  side: info.side,
-  entryPrice: px,
-  positionUsd,
-  time: fill.time
-}), trader);
+      trader,
+      coin,
+      side: info.to,
+      entryPrice: px,
+      positionUsd,
+      time: fill.time
+    }), trader, { side: info.to, px });
   }
 }
 
-async function broadcast(bot, coin, traderAddress, message, trader) {
+async function broadcast(bot, coin, traderAddress, message, trader, signalData = null) {
   // Get people following the coin OR this specific trader
   const [coinSubs, traderSubs] = await Promise.all([
     db.getSubscribersForCoin(coin.toUpperCase()),
@@ -100,16 +100,19 @@ async function broadcast(bot, coin, traderAddress, message, trader) {
   const allChatIds = [...new Set([...coinSubs, ...traderSubs])];
 
   const keyboard = {
-  inline_keyboard: [
-    [
-      { text: '🔍 View Trader', url: `https://app.hyperliquid.xyz/explorer/address/${traderAddress}` },
-      { text: '➕ Follow Trader', callback_data: `follow_trader:${traderAddress}` }
-    ],
-    [
-      { text: '📋 Copy Signal', callback_data: `copy_signal:${coin}:${info?.side || 'long'}:${px}` }
+    inline_keyboard: [
+      [
+        { text: '🔍 View Trader', url: `https://app.hyperliquid.xyz/explorer/address/${traderAddress}` },
+        { text: '➕ Follow Trader', callback_data: `follow_trader:${traderAddress}` }
+      ]
     ]
-  ]
-};
+  };
+
+  if (signalData) {
+    keyboard.inline_keyboard.push([
+      { text: '📋 Copy Signal', callback_data: `copy_signal:${coin}:${signalData.side}:${signalData.px}` }
+    ]);
+  }
 
   await Promise.all(
     allChatIds.map((chatId) =>
