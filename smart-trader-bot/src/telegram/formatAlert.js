@@ -36,7 +36,7 @@ function formatOpenAlert({ trader, coin, side, entryPrice, positionUsd, time }) 
 
   return (
     `🚨 *NEW TRADE SIGNAL*\n\n` +
-    `\( {action} — * \){coinSafe}*\n\n` +
+    `${action} — *${coinSafe}*\n\n` +
     `👤 Trader: *${name}*\n` +
     `📈 30D Profit: *+${pnl}*\n` +
     `🎯 Win Rate: *${win}%*\n\n` +
@@ -65,7 +65,7 @@ function formatCloseAlert({ trader, coin, entryPrice, exitPrice, pnlUsd, heldMs 
     `${profitEmoji} *POSITION CLOSED* — ${coinSafe}\n\n` +
     `👤 Trader: *${name}*\n` +
     `Entry → Exit: ${entry} → ${exit}\n` +
-    `PnL: *\( {pnlUsd >= 0 ? '+' : ''} \){pnl}*\n` +
+    `PnL: *${pnlUsd >= 0 ? '+' : ''}${pnl}*\n` +
     `⏱ Held: ${heldSafe}`
   );
 }
