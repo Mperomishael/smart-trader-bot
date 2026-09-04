@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { TELEGRAM_BOT_TOKEN } = require('../config');
 const db = require('../db/supabase');
-const { fmtUsd } = require('./formatAlert');
+const { fmtUsd, fmtPrice } = require('./formatAlert');
 
 function createBot() {
   const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
@@ -60,7 +60,7 @@ function createBot() {
     ]);
 
     await bot.sendMessage(chatId, text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: buttons },
       ...mainMenu
     });
@@ -100,7 +100,7 @@ function createBot() {
     ];
 
     await bot.sendMessage(chatId, text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: buttons },
       ...mainMenu
     });
@@ -116,7 +116,7 @@ function createBot() {
       `Just copy what the smart money is doing.`;
 
     await bot.sendMessage(chatId, text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
       reply_markup: {
         inline_keyboard: [
           [{ text: '🏆 See Top 10 Traders', callback_data: 'show_traders' }],
@@ -152,42 +152,79 @@ function createBot() {
       text += `_You are not following anyone yet._\n\nTap *🏆 Top 10 Traders* to start.`;
     }
 
-    const buttons = traderAddresses.map((addr) => {
+    const buttons = [];
+    traderAddresses.forEach((addr) => {
       const short = addr.slice(0, 6) + '…' + addr.slice(-4);
-      return [{ text: `❌ Unfollow ${short}`, callback_data: `unfollow_trader:${addr}` }];
+      buttons.push([{ text: `❌ Unfollow ${short}`, callback_data: `unfollow_trader:${addr}` }]);
+    });
+    coins.forEach((c) => {
+      buttons.push([{ text: `❌ Unfollow ${c}`, callback_data: `unfollow_coin:${c}` }]);
     });
 
     await bot.sendMessage(chatId, text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
       reply_markup: buttons.length > 0 ? { inline_keyboard: buttons } : undefined,
       ...mainMenu
     });
   }
 
-  // ========== MESSAGE HANDLER (more reliable) ==========
+  // ========== MESSAGE HANDLER ==========
   bot.on('message', async (msg) => {
     if (!msg.text) return;
 
     const chatId = msg.chat.id;
     const text = msg.text.trim();
+    const lower = text.toLowerCase();
 
     try {
-      if (text === '/start') {
+      // /start
+      if (lower === '/start') {
         await bot.sendMessage(chatId,
           `👋 *Welcome to Smart Trader Bot*\n\n` +
           `I watch the *Top 10 most profitable traders* on Hyperliquid and send you *instant alerts* the moment they open or close a trade.\n\n` +
           `Tap a button below to get started:`,
-          { parse_mode: 'Markdown', ...mainMenu }
+          { parse_mode: 'MarkdownV2', ...mainMenu }
         );
         return;
       }
 
-      if (text === '🏆 Top 10 Traders' || text === '/traders') {
+      // /follow <coin>
+      if (lower.startsWith('/follow ')) {
+        const coin = text.slice(8).trim().toUpperCase();
+        if (!coin) {
+          await bot.sendMessage(chatId, 'Usage: `/follow BTC`', { parse_mode: 'MarkdownV2', ...mainMenu });
+          return;
+        }
+        await db.follow(chatId, coin);
+        await bot.sendMessage(chatId, `✅ You are now following *${coin}*\n\nYou will get alerts when any tracked trader trades ${coin}.`, { parse_mode: 'MarkdownV2', ...mainMenu });
+        return;
+      }
+
+      // /unfollow <coin>
+      if (lower.startsWith('/unfollow ')) {
+        const coin = text.slice(10).trim().toUpperCase();
+        if (!coin) {
+          await bot.sendMessage(chatId, 'Usage: `/unfollow BTC`', { parse_mode: 'MarkdownV2', ...mainMenu });
+          return;
+        }
+        await db.unfollow(chatId, coin);
+        await bot.sendMessage(chatId, `❌ Unfollowed *${coin}*`, { parse_mode: 'MarkdownV2', ...mainMenu });
+        return;
+      }
+
+      // /following
+      if (lower === '/following') {
+        await showMyFollowing(chatId);
+        return;
+      }
+
+      // Menu buttons
+      if (text === '🏆 Top 10 Traders' || lower === '/traders') {
         await sendTop10(chatId);
         return;
       }
 
-      if (text === '🔥 Live Signals' || text === '/signals') {
+      if (text === '🔥 Live Signals' || lower === '/signals') {
         await sendLiveSignals(chatId);
         return;
       }
@@ -214,6 +251,7 @@ function createBot() {
     const data = query.data;
 
     try {
+      // Follow a specific trader
       if (data.startsWith('follow_trader:')) {
         const address = data.split(':')[1];
         const trader = await db.getTrader(address);
@@ -227,11 +265,12 @@ function createBot() {
         await bot.answerCallbackQuery(query.id, { text: `Following ${trader.display_name}` });
         await bot.sendMessage(chatId,
           `✅ You are now following *${trader.display_name}*\n\nYou will get an alert every time they trade.`,
-          { parse_mode: 'Markdown' }
+          { parse_mode: 'MarkdownV2' }
         );
         return;
       }
 
+      // Unfollow a specific trader
       if (data.startsWith('unfollow_trader:')) {
         const address = data.split(':')[1];
         await db.unfollowTrader(chatId, address);
@@ -240,18 +279,51 @@ function createBot() {
         return;
       }
 
+      // Unfollow a coin
+      if (data.startsWith('unfollow_coin:')) {
+        const coin = data.split(':')[1];
+        await db.unfollow(chatId, coin);
+        await bot.answerCallbackQuery(query.id, { text: `Unfollowed ${coin}` });
+        await showMyFollowing(chatId);
+        return;
+      }
+
+      // Copy signal button
+      if (data.startsWith('copy_signal:')) {
+        const parts = data.split(':');
+        const coin = parts[1];
+        const side = parts[2];
+        const entryPrice = parts[3];
+
+        const sideText = side === 'long' ? 'BUY / LONG' : 'SELL / SHORT';
+
+        await bot.answerCallbackQuery(query.id, { text: 'Signal copied!' });
+        await bot.sendMessage(chatId,
+          `📋 *COPY SIGNAL*\n\n` +
+          `Pair: *${coin}*\n` +
+          `Side: *${sideText}*\n` +
+          `Entry: *${Number(entryPrice).toFixed(2)}*\n\n` +
+          `_This is for reference only. DYOR before trading._`,
+          { parse_mode: 'MarkdownV2' }
+        );
+        return;
+      }
+
+      // Show / Refresh Top 10
       if (data === 'show_traders' || data === 'refresh_traders') {
         await bot.answerCallbackQuery(query.id);
         await sendTop10(chatId);
         return;
       }
 
+      // My Following
       if (data === 'my_following') {
         await bot.answerCallbackQuery(query.id);
         await showMyFollowing(chatId);
         return;
       }
 
+      // Follow All Top 10
       if (data === 'follow_all_top') {
         const traders = await db.getActiveTraders();
         if (!traders.length) {
@@ -266,8 +338,9 @@ function createBot() {
         await bot.answerCallbackQuery(query.id, { text: `Following ${traders.length} traders!` });
         await bot.sendMessage(chatId,
           `✅ You are now following all *Top ${traders.length}* traders.\n\nYou will receive instant alerts.`,
-          { parse_mode: 'Markdown' }
+          { parse_mode: 'MarkdownV2' }
         );
+        return;
       }
 
     } catch (err) {
