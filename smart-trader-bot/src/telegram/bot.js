@@ -35,7 +35,7 @@ function createBot() {
       const name = escapeMarkdownV2(t.display_name);
       const pnl = escapeMarkdownV2(fmtUsd(t.pnl_30d_usd));
       const win = escapeMarkdownV2(String(t.win_rate_pct || '?'));
-      text += `\( {medal} * \){name}*\n`;
+      text += `${medal} *${name}*\n`;
       text += `   +${pnl}  •  ${win}% win rate\n\n`;
     });
 
@@ -88,7 +88,7 @@ function createBot() {
       const name = escapeMarkdownV2(t.display_name);
       const pnl = escapeMarkdownV2(fmtUsd(t.pnl_30d_usd));
       const win = escapeMarkdownV2(String(t.win_rate_pct || '?'));
-      text += `\( {medal} * \){name}*\n`;
+      text += `${medal} *${name}*\n`;
       text += `   Profit: +${pnl}  •  Win rate: ${win}%\n\n`;
     });
 
@@ -160,10 +160,10 @@ function createBot() {
     const buttons = [];
     traderAddresses.forEach((addr) => {
       const short = addr.slice(0, 6) + '…' + addr.slice(-4);
-      buttons.push([{ text: `❌ Unfollow \( {short}`, callback_data: `unfollow_trader: \){addr}` }]);
+      buttons.push([{ text: `❌ Unfollow ${short}`, callback_data: `unfollow_trader:${addr}` }]);
     });
     coins.forEach((c) => {
-      buttons.push([{ text: `❌ Unfollow \( {c}`, callback_data: `unfollow_coin: \){c}` }]);
+      buttons.push([{ text: `❌ Unfollow ${c}`, callback_data: `unfollow_coin:${c}` }]);
     });
 
     await bot.sendMessage(chatId, text, {
