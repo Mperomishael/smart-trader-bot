@@ -31,12 +31,12 @@ function createBot() {
     let text = `🏆 *TOP 10 PROFITABLE TRADERS*\n_\\(Last 30 days\\)_\n\n`;
 
     sorted.forEach((t, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}\\.`;
       const name = escapeMarkdownV2(t.display_name);
       const pnl = escapeMarkdownV2(fmtUsd(t.pnl_30d_usd));
       const win = escapeMarkdownV2(String(t.win_rate_pct || '?'));
       text += `${medal} *${name}*\n`;
-      text += `   +${pnl}  •  ${win}% win rate\n\n`;
+      text += `   \\+${pnl}  •  ${win}% win rate\n\n`;
     });
 
     const buttons = [];
@@ -63,7 +63,6 @@ function createBot() {
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: buttons },
-      ...mainMenu,
     });
   }
 
@@ -84,12 +83,12 @@ function createBot() {
     text += `────────────────────\n`;
 
     sorted.forEach((t, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}\\.`;
       const name = escapeMarkdownV2(t.display_name);
       const pnl = escapeMarkdownV2(fmtUsd(t.pnl_30d_usd));
       const win = escapeMarkdownV2(String(t.win_rate_pct || '?'));
       text += `${medal} *${name}*\n`;
-      text += `   Profit: +${pnl}  •  Win rate: ${win}%\n\n`;
+      text += `   Profit: \\+${pnl}  •  Win rate: ${win}%\n\n`;
     });
 
     text += `────────────────────\n`;
@@ -106,7 +105,6 @@ function createBot() {
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: buttons },
-      ...mainMenu,
     });
   }
 
@@ -127,7 +125,6 @@ function createBot() {
           [{ text: '📋 What am I following?', callback_data: 'my_following' }],
         ],
       },
-      ...mainMenu,
     });
   }
 
@@ -169,7 +166,6 @@ function createBot() {
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
       reply_markup: buttons.length > 0 ? { inline_keyboard: buttons } : undefined,
-      ...mainMenu,
     });
   }
 
