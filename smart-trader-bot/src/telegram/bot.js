@@ -28,7 +28,7 @@ function createBot() {
       .sort((a, b) => (b.pnl_30d_usd || 0) - (a.pnl_30d_usd || 0))
       .slice(0, 10);
 
-    let text = `🏆 *TOP 10 PROFITABLE TRADERS*\n_(Last 30 days)_\n\n`;
+    let text = `🏆 *TOP 10 PROFITABLE TRADERS*\n_\\(Last 30 days\\)_\n\n`;
 
     sorted.forEach((t, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
