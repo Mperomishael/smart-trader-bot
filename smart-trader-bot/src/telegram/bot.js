@@ -1,24 +1,22 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { TELEGRAM_BOT_TOKEN } = require('../config');
 const db = require('../db/supabase');
-const { fmtUsd, fmtPrice } = require('./formatAlert');
+const { fmtUsd, escapeMarkdownV2 } = require('./formatAlert');
 
 function createBot() {
   const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
-  // ========== MAIN MENU KEYBOARD ==========
   const mainMenu = {
     reply_markup: {
       keyboard: [
         [{ text: '🏆 Top 10 Traders' }, { text: '🔥 Live Signals' }],
-        [{ text: '📋 My Following' }, { text: '📖 How it works' }]
+        [{ text: '📋 My Following' }, { text: '📖 How it works' }],
       ],
       resize_keyboard: true,
-      persistent: true
-    }
+      persistent: true,
+    },
   };
 
-  // ========== HELPER FUNCTIONS ==========
   async function sendTop10(chatId) {
     const traders = await db.getActiveTraders();
 
@@ -34,8 +32,11 @@ function createBot() {
 
     sorted.forEach((t, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-      text += `${medal} *${t.display_name}*\n`;
-      text += `   +${fmtUsd(t.pnl_30d_usd)}  •  ${t.win_rate_pct}% win rate\n\n`;
+      const name = escapeMarkdownV2(t.display_name);
+      const pnl = escapeMarkdownV2(fmtUsd(t.pnl_30d_usd));
+      const win = escapeMarkdownV2(String(t.win_rate_pct || '?'));
+      text += `\( {medal} * \){name}*\n`;
+      text += `   +${pnl}  •  ${win}% win rate\n\n`;
     });
 
     const buttons = [];
@@ -43,12 +44,12 @@ function createBot() {
       const row = [];
       row.push({
         text: `➕ ${sorted[i].display_name.slice(0, 14)}`,
-        callback_data: `follow_trader:${sorted[i].address}`
+        callback_data: `follow_trader:${sorted[i].address}`,
       });
       if (sorted[i + 1]) {
         row.push({
           text: `➕ ${sorted[i + 1].display_name.slice(0, 14)}`,
-          callback_data: `follow_trader:${sorted[i + 1].address}`
+          callback_data: `follow_trader:${sorted[i + 1].address}`,
         });
       }
       buttons.push(row);
@@ -56,13 +57,13 @@ function createBot() {
 
     buttons.push([
       { text: '➕ Follow All Top 10', callback_data: 'follow_all_top' },
-      { text: '🔄 Refresh', callback_data: 'refresh_traders' }
+      { text: '🔄 Refresh', callback_data: 'refresh_traders' },
     ]);
 
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: buttons },
-      ...mainMenu
+      ...mainMenu,
     });
   }
 
@@ -78,59 +79,62 @@ function createBot() {
       .slice(0, 10);
 
     let text = `🔥 *LIVE SIGNALS*\n\n`;
-    text += `I am currently watching these *Top 10* traders in real-time.\n`;
-    text += `The moment any of them opens or closes a trade, you will get an instant alert.\n\n`;
+    text += `I am currently watching these *Top 10* traders in real\\-time\\.\n`;
+    text += `The moment any of them opens or closes a trade, you will get an instant alert\\.\n\n`;
     text += `────────────────────\n`;
 
     sorted.forEach((t, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-      text += `${medal} *${t.display_name}*\n`;
-      text += `   Profit: +${fmtUsd(t.pnl_30d_usd)}  •  Win rate: ${t.win_rate_pct}%\n\n`;
+      const name = escapeMarkdownV2(t.display_name);
+      const pnl = escapeMarkdownV2(fmtUsd(t.pnl_30d_usd));
+      const win = escapeMarkdownV2(String(t.win_rate_pct || '?'));
+      text += `\( {medal} * \){name}*\n`;
+      text += `   Profit: +${pnl}  •  Win rate: ${win}%\n\n`;
     });
 
     text += `────────────────────\n`;
-    text += `_Alerts are sent instantly via WebSocket — no delay._`;
+    text += `_Alerts are sent instantly via WebSocket — no delay\\._`;
 
     const buttons = [
       [
         { text: '🏆 Full Top 10', callback_data: 'show_traders' },
-        { text: '📋 My Following', callback_data: 'my_following' }
+        { text: '📋 My Following', callback_data: 'my_following' },
       ],
-      [{ text: '➕ Follow All Top 10', callback_data: 'follow_all_top' }]
+      [{ text: '➕ Follow All Top 10', callback_data: 'follow_all_top' }],
     ];
 
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: buttons },
-      ...mainMenu
+      ...mainMenu,
     });
   }
 
   async function sendHowItWorks(chatId) {
     const text =
       `📖 *How this bot works*\n\n` +
-      `1️⃣ Every 15 minutes we scan Hyperliquid and pick the *Top 10* traders with highest profit + high win rate.\n\n` +
-      `2️⃣ We watch those 10 traders *24/7* in real time.\n\n` +
-      `3️⃣ The second any of them opens or closes a trade → you get an instant notification.\n\n` +
-      `4️⃣ You can follow individual traders or all of them.\n\n` +
-      `Just copy what the smart money is doing.`;
+      `1️⃣ Every 15 minutes we scan Hyperliquid and pick the *Top 10* traders with highest profit \\+ high win rate\\.\n\n` +
+      `2️⃣ We watch those 10 traders *24/7* in real time\\.\n\n` +
+      `3️⃣ The second any of them opens or closes a trade → you get an instant notification\\.\n\n` +
+      `4️⃣ You can follow individual traders or all of them\\.\n\n` +
+      `Just copy what the smart money is doing\\.`;
 
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
       reply_markup: {
         inline_keyboard: [
           [{ text: '🏆 See Top 10 Traders', callback_data: 'show_traders' }],
-          [{ text: '📋 What am I following?', callback_data: 'my_following' }]
-        ]
+          [{ text: '📋 What am I following?', callback_data: 'my_following' }],
+        ],
       },
-      ...mainMenu
+      ...mainMenu,
     });
   }
 
   async function showMyFollowing(chatId) {
     const [coins, traderAddresses] = await Promise.all([
       db.getFollowedCoins(chatId),
-      db.getFollowedTraders(chatId)
+      db.getFollowedTraders(chatId),
     ]);
 
     let text = `📋 *What you are following*\n\n`;
@@ -139,32 +143,33 @@ function createBot() {
       text += `*Traders:*\n`;
       for (const addr of traderAddresses) {
         const t = await db.getTrader(addr);
-        text += `• ${t ? t.display_name : addr.slice(0, 10) + '…'}\n`;
+        const name = escapeMarkdownV2(t ? t.display_name : addr.slice(0, 10) + '…');
+        text += `• ${name}\n`;
       }
       text += `\n`;
     }
 
     if (coins.length > 0) {
-      text += `*Coins:* ${coins.join(', ')}\n\n`;
+      text += `*Coins:* ${escapeMarkdownV2(coins.join(', '))}\n\n`;
     }
 
     if (traderAddresses.length === 0 && coins.length === 0) {
-      text += `_You are not following anyone yet._\n\nTap *🏆 Top 10 Traders* to start.`;
+      text += `_You are not following anyone yet\\._\n\nTap *🏆 Top 10 Traders* to start\\.`;
     }
 
     const buttons = [];
     traderAddresses.forEach((addr) => {
       const short = addr.slice(0, 6) + '…' + addr.slice(-4);
-      buttons.push([{ text: `❌ Unfollow ${short}`, callback_data: `unfollow_trader:${addr}` }]);
+      buttons.push([{ text: `❌ Unfollow \( {short}`, callback_data: `unfollow_trader: \){addr}` }]);
     });
     coins.forEach((c) => {
-      buttons.push([{ text: `❌ Unfollow ${c}`, callback_data: `unfollow_coin:${c}` }]);
+      buttons.push([{ text: `❌ Unfollow \( {c}`, callback_data: `unfollow_coin: \){c}` }]);
     });
 
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
       reply_markup: buttons.length > 0 ? { inline_keyboard: buttons } : undefined,
-      ...mainMenu
+      ...mainMenu,
     });
   }
 
@@ -177,18 +182,17 @@ function createBot() {
     const lower = text.toLowerCase();
 
     try {
-      // /start
       if (lower === '/start') {
-        await bot.sendMessage(chatId,
+        await bot.sendMessage(
+          chatId,
           `👋 *Welcome to Smart Trader Bot*\n\n` +
-          `I watch the *Top 10 most profitable traders* on Hyperliquid and send you *instant alerts* the moment they open or close a trade.\n\n` +
-          `Tap a button below to get started:`,
+            `I watch the *Top 10 most profitable traders* on Hyperliquid and send you *instant alerts* the moment they open or close a trade\\.\n\n` +
+            `Tap a button below to get started:`,
           { parse_mode: 'MarkdownV2', ...mainMenu }
         );
         return;
       }
 
-      // /follow <coin>
       if (lower.startsWith('/follow ')) {
         const coin = text.slice(8).trim().toUpperCase();
         if (!coin) {
@@ -196,11 +200,14 @@ function createBot() {
           return;
         }
         await db.follow(chatId, coin);
-        await bot.sendMessage(chatId, `✅ You are now following *${coin}*\n\nYou will get alerts when any tracked trader trades ${coin}.`, { parse_mode: 'MarkdownV2', ...mainMenu });
+        await bot.sendMessage(
+          chatId,
+          `✅ You are now following *${escapeMarkdownV2(coin)}*\n\nYou will get alerts when any tracked trader trades ${escapeMarkdownV2(coin)}\\.`,
+          { parse_mode: 'MarkdownV2', ...mainMenu }
+        );
         return;
       }
 
-      // /unfollow <coin>
       if (lower.startsWith('/unfollow ')) {
         const coin = text.slice(10).trim().toUpperCase();
         if (!coin) {
@@ -208,17 +215,18 @@ function createBot() {
           return;
         }
         await db.unfollow(chatId, coin);
-        await bot.sendMessage(chatId, `❌ Unfollowed *${coin}*`, { parse_mode: 'MarkdownV2', ...mainMenu });
+        await bot.sendMessage(chatId, `❌ Unfollowed *${escapeMarkdownV2(coin)}*`, {
+          parse_mode: 'MarkdownV2',
+          ...mainMenu,
+        });
         return;
       }
 
-      // /following
       if (lower === '/following') {
         await showMyFollowing(chatId);
         return;
       }
 
-      // Menu buttons
       if (text === '🏆 Top 10 Traders' || lower === '/traders') {
         await sendTop10(chatId);
         return;
@@ -238,7 +246,6 @@ function createBot() {
         await showMyFollowing(chatId);
         return;
       }
-
     } catch (err) {
       console.error('[message handler error]', err);
       await bot.sendMessage(chatId, 'Something went wrong. Please try again.');
@@ -251,7 +258,6 @@ function createBot() {
     const data = query.data;
 
     try {
-      // Follow a specific trader
       if (data.startsWith('follow_trader:')) {
         const address = data.split(':')[1];
         const trader = await db.getTrader(address);
@@ -263,14 +269,14 @@ function createBot() {
 
         await db.followTrader(chatId, address);
         await bot.answerCallbackQuery(query.id, { text: `Following ${trader.display_name}` });
-        await bot.sendMessage(chatId,
-          `✅ You are now following *${trader.display_name}*\n\nYou will get an alert every time they trade.`,
+        await bot.sendMessage(
+          chatId,
+          `✅ You are now following *${escapeMarkdownV2(trader.display_name)}*\n\nYou will get an alert every time they trade\\.`,
           { parse_mode: 'MarkdownV2' }
         );
         return;
       }
 
-      // Unfollow a specific trader
       if (data.startsWith('unfollow_trader:')) {
         const address = data.split(':')[1];
         await db.unfollowTrader(chatId, address);
@@ -279,7 +285,6 @@ function createBot() {
         return;
       }
 
-      // Unfollow a coin
       if (data.startsWith('unfollow_coin:')) {
         const coin = data.split(':')[1];
         await db.unfollow(chatId, coin);
@@ -288,7 +293,6 @@ function createBot() {
         return;
       }
 
-      // Copy signal button
       if (data.startsWith('copy_signal:')) {
         const parts = data.split(':');
         const coin = parts[1];
@@ -298,32 +302,30 @@ function createBot() {
         const sideText = side === 'long' ? 'BUY / LONG' : 'SELL / SHORT';
 
         await bot.answerCallbackQuery(query.id, { text: 'Signal copied!' });
-        await bot.sendMessage(chatId,
+        await bot.sendMessage(
+          chatId,
           `📋 *COPY SIGNAL*\n\n` +
-          `Pair: *${coin}*\n` +
-          `Side: *${sideText}*\n` +
-          `Entry: *${Number(entryPrice).toFixed(2)}*\n\n` +
-          `_This is for reference only. DYOR before trading._`,
+            `Pair: *${escapeMarkdownV2(coin)}*\n` +
+            `Side: *${sideText}*\n` +
+            `Entry: *${escapeMarkdownV2(Number(entryPrice).toFixed(2))}*\n\n` +
+            `_This is for reference only\\. DYOR before trading\\._`,
           { parse_mode: 'MarkdownV2' }
         );
         return;
       }
 
-      // Show / Refresh Top 10
       if (data === 'show_traders' || data === 'refresh_traders') {
         await bot.answerCallbackQuery(query.id);
         await sendTop10(chatId);
         return;
       }
 
-      // My Following
       if (data === 'my_following') {
         await bot.answerCallbackQuery(query.id);
         await showMyFollowing(chatId);
         return;
       }
 
-      // Follow All Top 10
       if (data === 'follow_all_top') {
         const traders = await db.getActiveTraders();
         if (!traders.length) {
@@ -336,13 +338,13 @@ function createBot() {
         }
 
         await bot.answerCallbackQuery(query.id, { text: `Following ${traders.length} traders!` });
-        await bot.sendMessage(chatId,
-          `✅ You are now following all *Top ${traders.length}* traders.\n\nYou will receive instant alerts.`,
+        await bot.sendMessage(
+          chatId,
+          `✅ You are now following all *Top ${traders.length}* traders\\.\n\nYou will receive instant alerts\\.`,
           { parse_mode: 'MarkdownV2' }
         );
         return;
       }
-
     } catch (err) {
       console.error('[callback error]', err);
       await bot.answerCallbackQuery(query.id, { text: 'Error occurred' });
