@@ -17,7 +17,7 @@ async function deactivateTradersNotIn(addresses) {
     .from('traders')
     .update({ active: false })
     .eq('active', true)
-    .not('address', 'in', `(\( {addresses.map((a) => `" \){a}"`).join(',')})`);
+    .not('address', 'in', `(${addresses.map((a) => `"${a}"`).join(',')})`);
 
   if (error) throw error;
 }
