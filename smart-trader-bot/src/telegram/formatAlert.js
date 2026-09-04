@@ -1,3 +1,8 @@
+function escapeMarkdownV2(text) {
+  if (text == null) return '';
+  return String(text).replace(/[_*[\]()\~`>#+=|{}.!\\-]/g, '\\$&');
+}
+
 function fmtUsd(n) {
   const num = Number(n) || 0;
   const abs = Math.abs(num);
@@ -20,19 +25,28 @@ function formatOpenAlert({ trader, coin, side, entryPrice, positionUsd, time }) 
   const action = isLong ? '🟢 BUY / LONG' : '🔴 SELL / SHORT';
   const sideText = isLong ? 'LONG' : 'SHORT';
 
+  const name = escapeMarkdownV2(trader.display_name);
+  const coinSafe = escapeMarkdownV2(coin);
+  const pnl = escapeMarkdownV2(fmtUsd(trader.pnl_30d_usd || 0));
+  const win = escapeMarkdownV2(String(trader.win_rate_pct || '?'));
+  const entry = escapeMarkdownV2(fmtPrice(entryPrice));
+  const size = escapeMarkdownV2(fmtUsd(positionUsd));
+  const t = escapeMarkdownV2(formatTime(time));
+  const entryRaw = escapeMarkdownV2(Number(entryPrice).toFixed(2));
+
   return (
     `🚨 *NEW TRADE SIGNAL*\n\n` +
-    `${action} — *${coin}*\n\n` +
-    `👤 Trader: *${trader.display_name}*\n` +
-    `📈 30D Profit: *+${fmtUsd(trader.pnl_30d_usd || 0)}*\n` +
-    `🎯 Win Rate: *${trader.win_rate_pct || '?'}%*\n\n` +
-    `💰 Entry Price: *${fmtPrice(entryPrice)}*\n` +
-    `📦 Position Size: *${fmtUsd(positionUsd)}*\n` +
-    `🕒 Time: ${formatTime(time)}\n\n` +
+    `\( {action} — * \){coinSafe}*\n\n` +
+    `👤 Trader: *${name}*\n` +
+    `📈 30D Profit: *+${pnl}*\n` +
+    `🎯 Win Rate: *${win}%*\n\n` +
+    `💰 Entry Price: *${entry}*\n` +
+    `📦 Position Size: *${size}*\n` +
+    `🕒 Time: ${t}\n\n` +
     `📋 *COPY SIGNAL:*\n` +
-    `Pair: ${coin}\n` +
+    `Pair: ${coinSafe}\n` +
     `Side: ${sideText}\n` +
-    `Entry: ${Number(entryPrice).toFixed(2)}`
+    `Entry: ${entryRaw}`
   );
 }
 
@@ -40,12 +54,19 @@ function formatCloseAlert({ trader, coin, entryPrice, exitPrice, pnlUsd, heldMs 
   const held = formatDuration(heldMs);
   const profitEmoji = pnlUsd >= 0 ? '✅' : '❌';
 
+  const name = escapeMarkdownV2(trader.display_name);
+  const coinSafe = escapeMarkdownV2(coin);
+  const entry = escapeMarkdownV2(fmtPrice(entryPrice));
+  const exit = escapeMarkdownV2(fmtPrice(exitPrice));
+  const pnl = escapeMarkdownV2(fmtUsd(pnlUsd));
+  const heldSafe = escapeMarkdownV2(held);
+
   return (
-    `${profitEmoji} *POSITION CLOSED* — ${coin}\n\n` +
-    `👤 Trader: *${trader.display_name}*\n` +
-    `Entry → Exit: ${fmtPrice(entryPrice)} → ${fmtPrice(exitPrice)}\n` +
-    `PnL: *${pnlUsd >= 0 ? '+' : ''}${fmtUsd(pnlUsd)}*\n` +
-    `⏱ Held: ${held}`
+    `${profitEmoji} *POSITION CLOSED* — ${coinSafe}\n\n` +
+    `👤 Trader: *${name}*\n` +
+    `Entry → Exit: ${entry} → ${exit}\n` +
+    `PnL: *\( {pnlUsd >= 0 ? '+' : ''} \){pnl}*\n` +
+    `⏱ Held: ${heldSafe}`
   );
 }
 
@@ -62,5 +83,6 @@ module.exports = {
   formatOpenAlert,
   formatCloseAlert,
   fmtUsd,
-  fmtPrice
+  fmtPrice,
+  escapeMarkdownV2,
 };
