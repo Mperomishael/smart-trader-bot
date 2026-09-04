@@ -16,7 +16,8 @@ async function deactivateTradersNotIn(addresses) {
   const { error } = await supabase
     .from('traders')
     .update({ active: false })
-    .not('address', 'in', `(${addresses.map((a) => `"${a}"`).join(',')})`);
+    .eq('active', true)
+    .not('address', 'in', `(\( {addresses.map((a) => `" \){a}"`).join(',')})`);
 
   if (error) throw error;
 }
@@ -28,7 +29,11 @@ async function getActiveTraders() {
 }
 
 async function getTrader(address) {
-  const { data, error } = await supabase.from('traders').select('*').eq('address', address).maybeSingle();
+  const { data, error } = await supabase
+    .from('traders')
+    .select('*')
+    .eq('address', address)
+    .maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -40,18 +45,28 @@ async function follow(chatId, coin) {
 }
 
 async function unfollow(chatId, coin) {
-  const { error } = await supabase.from('subscriptions').delete().eq('chat_id', chatId).eq('coin', coin);
+  const { error } = await supabase
+    .from('subscriptions')
+    .delete()
+    .eq('chat_id', chatId)
+    .eq('coin', coin);
   if (error) throw error;
 }
 
 async function getFollowedCoins(chatId) {
-  const { data, error } = await supabase.from('subscriptions').select('coin').eq('chat_id', chatId);
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('coin')
+    .eq('chat_id', chatId);
   if (error) throw error;
   return (data || []).map((r) => r.coin);
 }
 
 async function getSubscribersForCoin(coin) {
-  const { data, error } = await supabase.from('subscriptions').select('chat_id').eq('coin', coin);
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('chat_id')
+    .eq('coin', coin);
   if (error) throw error;
   return (data || []).map((r) => r.chat_id);
 }
@@ -121,7 +136,11 @@ async function clearOpenPosition(traderAddress, coin) {
 
 // ---- fill dedup ----
 async function isFillSeen(tid) {
-  const { data, error } = await supabase.from('seen_fills').select('tid').eq('tid', tid).maybeSingle();
+  const { data, error } = await supabase
+    .from('seen_fills')
+    .select('tid')
+    .eq('tid', tid)
+    .maybeSingle();
   if (error) throw error;
   return !!data;
 }
