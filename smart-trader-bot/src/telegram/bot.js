@@ -1,7 +1,8 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { TELEGRAM_BOT_TOKEN } = require('../config');
 const db = require('../db/supabase');
-const { fmtUsd, escapeMarkdownV2 } = require('./formatAlert');
+const state = require('../state');
+const { fmtUsd, fmtPrice, formatDuration, formatOpenAlert, escapeMarkdownV2 } = require('./formatAlert');
 
 function createBot() {
   const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
@@ -10,7 +11,8 @@ function createBot() {
     reply_markup: {
       keyboard: [
         [{ text: '🏆 Top 10 Traders' }, { text: '🔥 Live Signals' }],
-        [{ text: '📋 My Following' }, { text: '📖 How it works' }],
+        [{ text: '📊 Open Positions' }, { text: '📋 My Following' }],
+        [{ text: '📖 How it works' }],
       ],
       resize_keyboard: true,
       persistent: true,
@@ -128,6 +130,95 @@ function createBot() {
     });
   }
 
+  async function sendOpenPositions(chatId) {
+    const positions = await db.getAllOpenPositions();
+
+    if (!positions.length) {
+      return bot.sendMessage(
+        chatId,
+        '📊 No open positions right now.\n\nAll tracked traders are flat — check back soon.',
+        mainMenu
+      );
+    }
+
+    let text = `📊 *OPEN POSITIONS*\n\n`;
+    const seenTraders = new Map();
+
+    for (const p of positions) {
+      const trader = await db.getTrader(p.trader_address);
+      const name = escapeMarkdownV2(
+        trader ? trader.display_name : p.trader_address.slice(0, 6) + '…' + p.trader_address.slice(-4)
+      );
+      const coin = escapeMarkdownV2(p.coin);
+      const sideEmoji = p.side === 'long' ? '🟢' : '🔴';
+      const sideText = p.side === 'long' ? 'LONG' : 'SHORT';
+      const entry = escapeMarkdownV2(fmtPrice(p.entry_price));
+      const heldMs = Date.now() - new Date(p.opened_at).getTime();
+      const held = escapeMarkdownV2(formatDuration(heldMs));
+
+      text += `${sideEmoji} *${sideText} ${coin}* — ${name}\n`;
+      text += `   Entry: ${entry}  •  Open ${held}\n\n`;
+
+      if (trader && !seenTraders.has(p.trader_address)) {
+        seenTraders.set(p.trader_address, trader.display_name);
+      }
+    }
+
+    const buttons = [];
+    for (const [address, displayName] of seenTraders) {
+      buttons.push([{ text: `➕ Follow ${displayName.slice(0, 18)}`, callback_data: `follow_trader:${address}` }]);
+    }
+    buttons.push([{ text: '🔄 Refresh', callback_data: 'refresh_positions' }]);
+
+    await bot.sendMessage(chatId, text, {
+      parse_mode: 'MarkdownV2',
+      reply_markup: { inline_keyboard: buttons },
+    });
+  }
+
+  async function sendStatus(chatId) {
+    const uptimeMs = Date.now() - state.startedAt;
+    const uptime = escapeMarkdownV2(formatDuration(uptimeMs));
+    const wsIcon = state.wsConnected ? '🟢 Connected' : '🔴 Disconnected';
+    const lastRefresh = state.lastRefreshAt
+      ? escapeMarkdownV2(formatDuration(Date.now() - state.lastRefreshAt)) + ' ago'
+      : 'never yet';
+
+    const text =
+      `🩺 *BOT STATUS*\n\n` +
+      `Uptime: *${uptime}*\n` +
+      `Hyperliquid feed: ${wsIcon}\n` +
+      `Tracked traders: *${state.trackedCount}*\n` +
+      `Last leaderboard refresh: *${lastRefresh}*\n\n` +
+      `Use /testalert to send yourself a sample trade alert and confirm delivery works\\.`;
+
+    await bot.sendMessage(chatId, text, { parse_mode: 'MarkdownV2', ...mainMenu });
+  }
+
+  async function sendTestAlert(chatId) {
+    const traders = await db.getActiveTraders();
+    const trader = traders[0] || {
+      display_name: 'Demo Trader',
+      pnl_30d_usd: 125000,
+      win_rate_pct: 68,
+    };
+
+    const fakeAlert = formatOpenAlert({
+      trader,
+      coin: 'BTC',
+      side: 'long',
+      entryPrice: 63200,
+      positionUsd: 45000,
+      time: Date.now(),
+    });
+
+    await bot.sendMessage(
+      chatId,
+      `🧪 *TEST ALERT* \\(not a real trade — this just confirms delivery works\\)\n\n` + fakeAlert,
+      { parse_mode: 'MarkdownV2' }
+    );
+  }
+
   async function showMyFollowing(chatId) {
     const [coins, traderAddresses] = await Promise.all([
       db.getFollowedCoins(chatId),
@@ -228,6 +319,21 @@ function createBot() {
         return;
       }
 
+      if (text === '📊 Open Positions' || lower === '/positions') {
+        await sendOpenPositions(chatId);
+        return;
+      }
+
+      if (lower === '/status') {
+        await sendStatus(chatId);
+        return;
+      }
+
+      if (lower === '/testalert') {
+        await sendTestAlert(chatId);
+        return;
+      }
+
       if (text === '🔥 Live Signals' || lower === '/signals') {
         await sendLiveSignals(chatId);
         return;
@@ -313,6 +419,12 @@ function createBot() {
       if (data === 'show_traders' || data === 'refresh_traders') {
         await bot.answerCallbackQuery(query.id);
         await sendTop10(chatId);
+        return;
+      }
+
+      if (data === 'refresh_positions') {
+        await bot.answerCallbackQuery(query.id);
+        await sendOpenPositions(chatId);
         return;
       }
 
