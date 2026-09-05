@@ -5,6 +5,10 @@ const {
   MIN_WIN_RATE_PCT,
   MIN_ACCOUNT_VALUE_USD,
   MAX_TRACKED_TRADERS,
+  MAX_ACTIVE_TRADERS,
+  ACTIVITY_LOOKBACK_DAYS,
+  MIN_ACTIVE_ACCOUNT_VALUE_USD,
+  MIN_TRADES_PER_DAY,
 } = require('../config');
 
 async function fetchLeaderboard() {
@@ -14,15 +18,18 @@ async function fetchLeaderboard() {
   return data.leaderboardRows || data;
 }
 
-async function computeWinRate(address) {
+async function fetchFills(address) {
   const res = await fetch(HYPERLIQUID_INFO_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'userFills', user: address }),
   });
-  if (!res.ok) return null;
+  if (!res.ok) return [];
   const fills = await res.json();
+  return Array.isArray(fills) ? fills : [];
+}
 
+function winRateFromFills(fills) {
   let wins = 0;
   let losses = 0;
   for (const f of fills) {
@@ -34,6 +41,22 @@ async function computeWinRate(address) {
   const total = wins + losses;
   if (total < 5) return null;
   return Number(((wins / total) * 100).toFixed(1));
+}
+
+async function computeWinRate(address) {
+  const fills = await fetchFills(address);
+  return winRateFromFills(fills);
+}
+
+// Trades per day over the recent lookback window, plus a loose win rate
+// if there's enough closed-trade history to compute one.
+async function computeActivityStats(address, lookbackDays) {
+  const fills = await fetchFills(address);
+  const cutoff = Date.now() - lookbackDays * 24 * 3600 * 1000;
+  const recent = fills.filter((f) => Number(f.time) >= cutoff);
+  const tradesPerDay = Number((recent.length / lookbackDays).toFixed(1));
+  const winRate = winRateFromFills(fills);
+  return { tradesPerDay, winRate };
 }
 
 function pickWindow(row, window) {
@@ -48,8 +71,8 @@ function makeDisplayName(row, address) {
   return `Trader ${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-async function buildQualifiedTraderList() {
-  const rows = await fetchLeaderboard();
+async function buildQualifiedTraderList(rows) {
+  rows = rows || (await fetchLeaderboard());
 
   const candidates = rows
     .map((row) => {
@@ -82,6 +105,7 @@ async function buildQualifiedTraderList() {
       address: c.address,
       display_name: c.displayName,
       active: true,
+      pool: 'quality',
       pnl_30d_usd: c.pnl30d,
       roi_30d_pct: c.roi30d,
       win_rate_pct: winRate,
@@ -94,4 +118,61 @@ async function buildQualifiedTraderList() {
   return qualified;
 }
 
-module.exports = { fetchLeaderboard, computeWinRate, buildQualifiedTraderList };
+// Second, independent pool: traders ranked by how often they trade rather
+// than by profit. Draws from the same leaderboard as a candidate universe
+// (bounded, to keep API call volume sane), excludes anyone already in the
+// quality pool, and keeps only those clearing a light activity + account
+// value bar.
+async function buildActiveTraderList(excludeAddresses, rows) {
+  rows = rows || (await fetchLeaderboard());
+  const exclude = new Set(excludeAddresses || []);
+  const candidatePoolSize = MAX_ACTIVE_TRADERS * 4;
+
+  const candidates = rows
+    .map((row) => {
+      const month = pickWindow(row, 'month');
+      const address = row.ethAddress || row.address;
+      return {
+        address,
+        displayName: makeDisplayName(row, address),
+        accountValue: Number(row.accountValue),
+        pnl30d: month ? Number(month.pnl) : null,
+      };
+    })
+    .filter(
+      (c) =>
+        c.address &&
+        !exclude.has(c.address) &&
+        c.accountValue >= MIN_ACTIVE_ACCOUNT_VALUE_USD
+    )
+    .sort((a, b) => b.accountValue - a.accountValue)
+    .slice(0, candidatePoolSize);
+
+  const scored = [];
+  for (const c of candidates) {
+    const { tradesPerDay, winRate } = await computeActivityStats(c.address, ACTIVITY_LOOKBACK_DAYS);
+    if (tradesPerDay < MIN_TRADES_PER_DAY) continue;
+
+    scored.push({
+      address: c.address,
+      display_name: c.displayName,
+      active: true,
+      pool: 'activity',
+      pnl_30d_usd: c.pnl30d,
+      win_rate_pct: winRate,
+      account_value: c.accountValue,
+      trades_per_day: tradesPerDay,
+      stats_updated_at: new Date().toISOString(),
+    });
+  }
+
+  return scored.sort((a, b) => b.trades_per_day - a.trades_per_day).slice(0, MAX_ACTIVE_TRADERS);
+}
+
+module.exports = {
+  fetchLeaderboard,
+  computeWinRate,
+  computeActivityStats,
+  buildQualifiedTraderList,
+  buildActiveTraderList,
+};
