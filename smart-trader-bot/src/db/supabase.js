@@ -28,6 +28,16 @@ async function getActiveTraders() {
   return data || [];
 }
 
+async function getActiveTradersByPool(pool) {
+  const { data, error } = await supabase
+    .from('traders')
+    .select('*')
+    .eq('active', true)
+    .eq('pool', pool);
+  if (error) throw error;
+  return data || [];
+}
+
 async function getTrader(address) {
   const { data, error } = await supabase
     .from('traders')
@@ -168,6 +178,7 @@ module.exports = {
   upsertTraders,
   deactivateTradersNotIn,
   getActiveTraders,
+  getActiveTradersByPool,
   getTrader,
   follow,
   unfollow,
