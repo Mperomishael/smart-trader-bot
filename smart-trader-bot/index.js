@@ -4,6 +4,7 @@ const { createBot } = require('./src/telegram/bot');
 const { FillListener } = require('./src/hyperliquid/fillListener');
 const { processFill } = require('./src/alertEngine');
 const { refreshTraders } = require('./scripts/refreshTraders');
+const state = require('./src/state');
 
 async function main() {
   console.log('[boot] Smart Trader Bot starting...');
@@ -17,6 +18,8 @@ async function main() {
   const traders = await db.getActiveTraders();
   const addresses = traders.map((t) => t.address);
   console.log(`[boot] Tracking ${addresses.length} top traders`);
+  state.lastRefreshAt = Date.now();
+  state.trackedCount = addresses.length;
 
   // Create Telegram bot
   const bot = createBot();
@@ -35,6 +38,8 @@ async function main() {
       console.log('[refresh] Updating Top 10 traders...');
       const newAddresses = await refreshTraders();
       listener.updateAddresses(newAddresses);
+      state.lastRefreshAt = Date.now();
+      state.trackedCount = newAddresses.length;
       console.log(`[refresh] Now tracking ${newAddresses.length} traders`);
     } catch (err) {
       console.error('[refresh] failed:', err.message);

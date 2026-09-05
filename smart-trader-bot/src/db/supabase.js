@@ -3,7 +3,7 @@ const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = require('../config');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// ---- traders -------------------------------------------------------------
+// ---- traders ----
 async function upsertTraders(traders) {
   if (!traders.length) return;
   const { error } = await supabase.from('traders').upsert(traders, { onConflict: 'address' });
@@ -12,10 +12,13 @@ async function upsertTraders(traders) {
 
 async function deactivateTradersNotIn(addresses) {
   if (!addresses.length) return;
+
   const { error } = await supabase
     .from('traders')
     .update({ active: false })
-    .not('address', 'in', `(\( {addresses.map((a) => `" \){a}"`).join(',')})`);
+    .eq('active', true)
+    .not('address', 'in', `(${addresses.map((a) => `"${a}"`).join(',')})`);
+
   if (error) throw error;
 }
 
@@ -26,35 +29,49 @@ async function getActiveTraders() {
 }
 
 async function getTrader(address) {
-  const { data, error } = await supabase.from('traders').select('*').eq('address', address).maybeSingle();
+  const { data, error } = await supabase
+    .from('traders')
+    .select('*')
+    .eq('address', address)
+    .maybeSingle();
   if (error) throw error;
   return data;
 }
 
-// ---- coin subscriptions --------------------------------------------------
+// ---- coin subscriptions ----
 async function follow(chatId, coin) {
   const { error } = await supabase.from('subscriptions').upsert({ chat_id: chatId, coin });
   if (error) throw error;
 }
 
 async function unfollow(chatId, coin) {
-  const { error } = await supabase.from('subscriptions').delete().eq('chat_id', chatId).eq('coin', coin);
+  const { error } = await supabase
+    .from('subscriptions')
+    .delete()
+    .eq('chat_id', chatId)
+    .eq('coin', coin);
   if (error) throw error;
 }
 
 async function getFollowedCoins(chatId) {
-  const { data, error } = await supabase.from('subscriptions').select('coin').eq('chat_id', chatId);
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('coin')
+    .eq('chat_id', chatId);
   if (error) throw error;
   return (data || []).map((r) => r.coin);
 }
 
 async function getSubscribersForCoin(coin) {
-  const { data, error } = await supabase.from('subscriptions').select('chat_id').eq('coin', coin);
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('chat_id')
+    .eq('coin', coin);
   if (error) throw error;
   return (data || []).map((r) => r.chat_id);
 }
 
-// ---- trader subscriptions (NEW) ------------------------------------------
+// ---- trader subscriptions ----
 async function followTrader(chatId, traderAddress) {
   const { error } = await supabase
     .from('trader_subscriptions')
@@ -89,7 +106,7 @@ async function getSubscribersForTrader(traderAddress) {
   return (data || []).map((r) => r.chat_id);
 }
 
-// ---- open positions ------------------------------------------------------
+// ---- open positions ----
 async function getOpenPosition(traderAddress, coin) {
   const { data, error } = await supabase
     .from('open_positions')
@@ -99,6 +116,15 @@ async function getOpenPosition(traderAddress, coin) {
     .maybeSingle();
   if (error) throw error;
   return data;
+}
+
+async function getAllOpenPositions() {
+  const { data, error } = await supabase
+    .from('open_positions')
+    .select('*')
+    .order('opened_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
 }
 
 async function upsertOpenPosition(pos) {
@@ -117,9 +143,13 @@ async function clearOpenPosition(traderAddress, coin) {
   if (error) throw error;
 }
 
-// ---- fill dedup ----------------------------------------------------------
+// ---- fill dedup ----
 async function isFillSeen(tid) {
-  const { data, error } = await supabase.from('seen_fills').select('tid').eq('tid', tid).maybeSingle();
+  const { data, error } = await supabase
+    .from('seen_fills')
+    .select('tid')
+    .eq('tid', tid)
+    .maybeSingle();
   if (error) throw error;
   return !!data;
 }
@@ -148,6 +178,7 @@ module.exports = {
   getFollowedTraders,
   getSubscribersForTrader,
   getOpenPosition,
+  getAllOpenPositions,
   upsertOpenPosition,
   clearOpenPosition,
   isFillSeen,

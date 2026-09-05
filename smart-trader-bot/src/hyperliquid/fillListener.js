@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const { HYPERLIQUID_WS_URL } = require('../config');
+const state = require('../state');
 
 // Subscribes to real-time `userFills` for a list of trader addresses and
 // invokes onFill(fill, traderAddress) for each new fill. Handles reconnects
@@ -40,6 +41,7 @@ class FillListener {
 
     this.ws.on('open', () => {
       console.log(`[hyperliquid-ws] connected, subscribing to ${this.addresses.length} traders`);
+      state.wsConnected = true;
       this.reconnectDelayMs = 1000;
       this.addresses.forEach((a) => this._subscribe(a));
       this.pingInterval = setInterval(() => {
@@ -63,6 +65,7 @@ class FillListener {
 
     this.ws.on('close', () => {
       console.warn('[hyperliquid-ws] disconnected, reconnecting...');
+      state.wsConnected = false;
       clearInterval(this.pingInterval);
       setTimeout(() => this._connect(), this.reconnectDelayMs);
       this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, 30000);
