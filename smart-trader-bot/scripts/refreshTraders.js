@@ -1,16 +1,26 @@
-const { buildQualifiedTraderList } = require('../src/hyperliquid/leaderboard');
+const { buildQualifiedTraderList, buildActiveTraderList, fetchLeaderboard } = require('../src/hyperliquid/leaderboard');
 const db = require('../src/db/supabase');
 
 async function refreshTraders() {
   console.log('[refresh-traders] pulling leaderboard...');
-  const qualified = await buildQualifiedTraderList();
-  console.log(`[refresh-traders] ${qualified.length} traders qualified`);
+  const rows = await fetchLeaderboard();
 
-  await db.upsertTraders(qualified);
-  if (qualified.length) {
-    await db.deactivateTradersNotIn(qualified.map((t) => t.address));
+  const qualified = await buildQualifiedTraderList(rows);
+  console.log(`[refresh-traders] ${qualified.length} quality-pool traders qualified`);
+
+  const active = await buildActiveTraderList(
+    qualified.map((t) => t.address),
+    rows
+  );
+  console.log(`[refresh-traders] ${active.length} activity-pool traders qualified`);
+
+  const combined = [...qualified, ...active];
+
+  await db.upsertTraders(combined);
+  if (combined.length) {
+    await db.deactivateTradersNotIn(combined.map((t) => t.address));
   }
-  return qualified.map((t) => t.address);
+  return combined.map((t) => t.address);
 }
 
 if (require.main === module) {
