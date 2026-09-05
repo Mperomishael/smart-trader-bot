@@ -4,11 +4,13 @@ create table if not exists traders (
   address        text primary key,
   display_name   text not null,
   active         boolean default true,
+  pool           text not null default 'quality',  -- 'quality' (top by profit) or 'activity' (top by trade frequency)
   added_at       timestamptz default now(),
   pnl_30d_usd    numeric,
   roi_30d_pct    numeric,
   win_rate_pct   numeric,
   account_value  numeric,
+  trades_per_day numeric,
   stats_updated_at timestamptz
 );
 
@@ -48,6 +50,13 @@ create table if not exists seen_fills (
   seen_at  timestamptz default now()
 );
 
+-- Migration for installs that already ran this file before the 'pool'
+-- and 'trades_per_day' columns existed. Safe to re-run. Must run before
+-- any index below references these columns.
+alter table traders add column if not exists pool text not null default 'quality';
+alter table traders add column if not exists trades_per_day numeric;
+
 create index if not exists idx_subscriptions_coin on subscriptions (coin);
 create index if not exists idx_trader_subscriptions_trader on trader_subscriptions (trader_address);
 create index if not exists idx_traders_active on traders (active) where active = true;
+create index if not exists idx_traders_pool on traders (pool);
