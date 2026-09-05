@@ -16,11 +16,17 @@ module.exports = {
   HYPERLIQUID_LEADERBOARD_URL:
     process.env.HYPERLIQUID_LEADERBOARD_URL || 'https://stats-data.hyperliquid.xyz/Mainnet/leaderboard',
 
-  // Strict Top 10 settings
-  MIN_PNL_30D_USD: Number(process.env.MIN_PNL_30D_USD || 25000),
-  MIN_WIN_RATE_PCT: Number(process.env.MIN_WIN_RATE_PCT || 50),
-  MIN_ACCOUNT_VALUE_USD: Number(process.env.MIN_ACCOUNT_VALUE_USD || 50000),
-  MAX_TRACKED_TRADERS: Number(process.env.MAX_TRACKED_TRADERS || 10),
+  // Quality pool — top by profit + win rate (loosened for higher volume)
+  MIN_PNL_30D_USD: Number(process.env.MIN_PNL_30D_USD || 10000),
+  MIN_WIN_RATE_PCT: Number(process.env.MIN_WIN_RATE_PCT || 45),
+  MIN_ACCOUNT_VALUE_USD: Number(process.env.MIN_ACCOUNT_VALUE_USD || 25000),
+  MAX_TRACKED_TRADERS: Number(process.env.MAX_TRACKED_TRADERS || 30),
+
+  // Activity pool — top by trade frequency, separate from the quality pool
+  MAX_ACTIVE_TRADERS: Number(process.env.MAX_ACTIVE_TRADERS || 20),
+  ACTIVITY_LOOKBACK_DAYS: Number(process.env.ACTIVITY_LOOKBACK_DAYS || 2),
+  MIN_ACTIVE_ACCOUNT_VALUE_USD: Number(process.env.MIN_ACTIVE_ACCOUNT_VALUE_USD || 10000),
+  MIN_TRADES_PER_DAY: Number(process.env.MIN_TRADES_PER_DAY || 3),
 
   // Refresh leaderboard every 15 minutes
   TRADER_REFRESH_INTERVAL_MS: Number(process.env.TRADER_REFRESH_INTERVAL_MS || 15 * 60 * 1000),
