@@ -30,4 +30,11 @@ module.exports = {
 
   // Refresh leaderboard every 15 minutes
   TRADER_REFRESH_INTERVAL_MS: Number(process.env.TRADER_REFRESH_INTERVAL_MS || 15 * 60 * 1000),
+
+  // Comma-separated Telegram chat IDs allowed to run admin commands like /customers
+  ADMIN_CHAT_IDS: (process.env.ADMIN_CHAT_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(Number),
 };
