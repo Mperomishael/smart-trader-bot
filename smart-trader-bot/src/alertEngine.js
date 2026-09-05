@@ -117,7 +117,7 @@ async function broadcast(bot, coin, traderAddress, message, trader, signalData =
   await Promise.all(
     allChatIds.map((chatId) =>
       bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
+        parse_mode: 'MarkdownV2',
         reply_markup: keyboard,
         disable_web_page_preview: true,
       }).catch((err) => console.error(`[telegram] failed to send to ${chatId}:`, err.message))
