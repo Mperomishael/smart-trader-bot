@@ -20,6 +20,14 @@ create table if not exists subscriptions (
   primary key (chat_id, coin)
 );
 
+-- One row per (telegram chat, trader) the chat wants alerts for.
+create table if not exists trader_subscriptions (
+  chat_id         bigint not null,
+  trader_address  text not null,
+  created_at      timestamptz default now(),
+  primary key (chat_id, trader_address)
+);
+
 -- Open position per trader+coin, used to compute entry price / hold time
 -- when a close fill arrives. Overwritten on every open/increase fill.
 create table if not exists open_positions (
@@ -41,4 +49,5 @@ create table if not exists seen_fills (
 );
 
 create index if not exists idx_subscriptions_coin on subscriptions (coin);
+create index if not exists idx_trader_subscriptions_trader on trader_subscriptions (trader_address);
 create index if not exists idx_traders_active on traders (active) where active = true;
