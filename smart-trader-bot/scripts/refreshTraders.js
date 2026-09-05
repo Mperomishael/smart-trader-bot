@@ -27,7 +27,7 @@ if (require.main === module) {
   refreshTraders()
     .then(() => process.exit(0))
     .catch((err) => {
-      console.error('[refresh-traders] failed:', err);
+      console.error('[refresh-traders] failed:', err.message);
       process.exit(1);
     });
 }
