@@ -6,6 +6,14 @@ const { processFill } = require('./src/alertEngine');
 const { refreshTraders } = require('./scripts/refreshTraders');
 const state = require('./src/state');
 
+// Safety net: one unhandled rejection anywhere (e.g. a Telegram API call
+// racing an expired callback query) should never take the whole bot down.
+// Log it and keep running instead of crash-looping.
+process.on('unhandledRejection', (reason) => {
+  const msg = reason && reason.message ? reason.message : String(reason);
+  console.error('[unhandled-rejection]', msg);
+});
+
 async function main() {
   console.log('[boot] Smart Trader Bot starting...');
   console.log('[boot] Refreshing Top 10 traders list...');
