@@ -1,8 +1,9 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { TELEGRAM_BOT_TOKEN } = require('../config');
+const { TELEGRAM_BOT_TOKEN, ADMIN_CHAT_IDS } = require('../config');
 const db = require('../db/supabase');
 const state = require('../state');
-const { fmtUsd, fmtPrice, formatDuration, formatOpenAlert, escapeMarkdownV2 } = require('./formatAlert');
+const { fetchLivePositionsByCoin } = require('../hyperliquid/positions');
+const { fmtUsd, fmtPrice, fmtPct, formatDuration, formatOpenAlert, escapeMarkdownV2 } = require('./formatAlert');
 
 function createBot() {
   const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
@@ -10,9 +11,9 @@ function createBot() {
   const mainMenu = {
     reply_markup: {
       keyboard: [
-        [{ text: '🏆 Top 10 Traders' }, { text: '🔥 Live Signals' }],
-        [{ text: '📊 Open Positions' }, { text: '📋 My Following' }],
-        [{ text: '📖 How it works' }],
+        [{ text: '🏆 Top 10 Traders' }, { text: '⚡ Most Active' }],
+        [{ text: '🔥 Live Signals' }, { text: '📊 Open Positions' }],
+        [{ text: '📋 My Following' }, { text: '📖 How it works' }],
       ],
       resize_keyboard: true,
       persistent: true,
@@ -20,7 +21,7 @@ function createBot() {
   };
 
   async function sendTop10(chatId) {
-    const traders = await db.getActiveTraders();
+    const traders = await db.getActiveTradersByPool('quality');
 
     if (!traders.length) {
       return bot.sendMessage(chatId, 'No traders loaded yet. Please wait a minute and try again.', mainMenu);
@@ -61,6 +62,61 @@ function createBot() {
       { text: '➕ Follow All Top 10', callback_data: 'follow_all_top' },
       { text: '🔄 Refresh', callback_data: 'refresh_traders' },
     ]);
+    buttons.push([{ text: '⚡ See Most Active Traders', callback_data: 'show_active' }]);
+
+    await bot.sendMessage(chatId, text, {
+      parse_mode: 'MarkdownV2',
+      reply_markup: { inline_keyboard: buttons },
+    });
+  }
+
+  async function sendActiveTraders(chatId) {
+    const traders = await db.getActiveTradersByPool('activity');
+
+    if (!traders.length) {
+      return bot.sendMessage(
+        chatId,
+        'No active traders loaded yet. Please wait a minute and try again.',
+        mainMenu
+      );
+    }
+
+    const sorted = traders
+      .sort((a, b) => (b.trades_per_day || 0) - (a.trades_per_day || 0))
+      .slice(0, 10);
+
+    let text = `⚡ *MOST ACTIVE TRADERS*\n_\\(By trade frequency, last few days\\)_\n\n`;
+
+    sorted.forEach((t, i) => {
+      const name = escapeMarkdownV2(t.display_name);
+      const freq = escapeMarkdownV2(String(t.trades_per_day));
+      const winText =
+        t.win_rate_pct != null ? `${escapeMarkdownV2(String(t.win_rate_pct))}% win rate` : 'win rate n/a';
+      text += `${i + 1}\\. *${name}*\n`;
+      text += `   🔁 ~${freq} trades/day  •  ${winText}\n\n`;
+    });
+
+    const buttons = [];
+    for (let i = 0; i < sorted.length; i += 2) {
+      const row = [];
+      row.push({
+        text: `➕ ${sorted[i].display_name.slice(0, 14)}`,
+        callback_data: `follow_trader:${sorted[i].address}`,
+      });
+      if (sorted[i + 1]) {
+        row.push({
+          text: `➕ ${sorted[i + 1].display_name.slice(0, 14)}`,
+          callback_data: `follow_trader:${sorted[i + 1].address}`,
+        });
+      }
+      buttons.push(row);
+    }
+
+    buttons.push([
+      { text: '➕ Follow All Active', callback_data: 'follow_all_active' },
+      { text: '🔄 Refresh', callback_data: 'refresh_active' },
+    ]);
+    buttons.push([{ text: '🏆 See Top 10 Traders', callback_data: 'show_traders' }]);
 
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
@@ -80,7 +136,7 @@ function createBot() {
       .slice(0, 10);
 
     let text = `🔥 *LIVE SIGNALS*\n\n`;
-    text += `I am currently watching these *Top 10* traders in real\\-time\\.\n`;
+    text += `I am currently watching *${traders.length}* traders in real\\-time \\(top 10 shown below\\)\\.\n`;
     text += `The moment any of them opens or closes a trade, you will get an instant alert\\.\n\n`;
     text += `────────────────────\n`;
 
@@ -113,17 +169,18 @@ function createBot() {
   async function sendHowItWorks(chatId) {
     const text =
       `📖 *How this bot works*\n\n` +
-      `1️⃣ Every 15 minutes we scan Hyperliquid and pick the *Top 10* traders with highest profit \\+ high win rate\\.\n\n` +
-      `2️⃣ We watch those 10 traders *24/7* in real time\\.\n\n` +
+      `1️⃣ Every 15 minutes we scan Hyperliquid for two groups: the *Top* traders by profit \\+ win rate, and the *Most Active* traders by trade frequency\\.\n\n` +
+      `2️⃣ We watch all of them *24/7* in real time\\.\n\n` +
       `3️⃣ The second any of them opens or closes a trade → you get an instant notification\\.\n\n` +
-      `4️⃣ You can follow individual traders or all of them\\.\n\n` +
-      `Just copy what the smart money is doing\\.`;
+      `4️⃣ You can follow individual traders, whole groups, or specific coins\\.\n\n` +
+      `Follow the *Top* traders for quality, or the *Most Active* traders if you want frequent signals\\.`;
 
     await bot.sendMessage(chatId, text, {
       parse_mode: 'MarkdownV2',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🏆 See Top 10 Traders', callback_data: 'show_traders' }],
+          [{ text: '🏆 See Top Traders', callback_data: 'show_traders' }],
+          [{ text: '⚡ See Most Active', callback_data: 'show_active' }],
           [{ text: '📋 What am I following?', callback_data: 'my_following' }],
         ],
       },
@@ -143,6 +200,7 @@ function createBot() {
 
     let text = `📊 *OPEN POSITIONS*\n\n`;
     const seenTraders = new Map();
+    const liveCache = new Map(); // trader_address -> { coin: liveInfo }
 
     for (const p of positions) {
       const trader = await db.getTrader(p.trader_address);
@@ -157,7 +215,34 @@ function createBot() {
       const held = escapeMarkdownV2(formatDuration(heldMs));
 
       text += `${sideEmoji} *${sideText} ${coin}* — ${name}\n`;
-      text += `   Entry: ${entry}  •  Open ${held}\n\n`;
+      text += `   Entry: ${entry}  •  Open ${held}\n`;
+
+      // Enrich with live leverage / liquidation / unrealized PnL
+      if (!liveCache.has(p.trader_address)) {
+        liveCache.set(p.trader_address, await fetchLivePositionsByCoin(p.trader_address));
+      }
+      const live = liveCache.get(p.trader_address)[p.coin];
+
+      if (live) {
+        const pnlEmoji = live.unrealizedPnl >= 0 ? '✅' : '❌';
+        const pnlSign = live.unrealizedPnl >= 0 ? '\\+' : '';
+        const pnlUsd = escapeMarkdownV2(fmtUsd(live.unrealizedPnl));
+        const pnlPct =
+          live.returnOnEquityPct != null ? escapeMarkdownV2(fmtPct(live.returnOnEquityPct)) : null;
+        text += `   ${pnlEmoji} Unrealized PnL: *${pnlSign}${pnlUsd}*` + (pnlPct ? ` \\(${pnlPct}\\)` : '') + `\n`;
+
+        if (live.leverage != null) {
+          text += `   ⚡ Leverage: *${escapeMarkdownV2(String(live.leverage))}x*`;
+          if (live.liquidationPx != null) {
+            text += `  •  💥 Liq\\. Price: *${escapeMarkdownV2(fmtPrice(live.liquidationPx))}*`;
+          }
+          text += `\n`;
+        }
+      } else {
+        text += `   _Live data unavailable_\n`;
+      }
+
+      text += `\n`;
 
       if (trader && !seenTraders.has(p.trader_address)) {
         seenTraders.set(p.trader_address, trader.display_name);
@@ -174,6 +259,29 @@ function createBot() {
       parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: buttons },
     });
+  }
+
+  async function sendCustomerList(chatId) {
+    const users = await db.getAllBotUsers();
+
+    if (!users.length) {
+      return bot.sendMessage(chatId, 'No customers recorded yet.');
+    }
+
+    let text = `👥 *CUSTOMERS* \\(${users.length} total\\)\n\n`;
+    const shown = users.slice(0, 30);
+
+    for (const u of shown) {
+      const handle = u.username ? '@' + escapeMarkdownV2(u.username) : escapeMarkdownV2(String(u.chat_id));
+      const since = escapeMarkdownV2(new Date(u.first_seen).toISOString().slice(0, 10));
+      text += `• ${handle} — since ${since}\n`;
+    }
+
+    if (users.length > shown.length) {
+      text += `\n_\\.\\.\\.and ${users.length - shown.length} more_`;
+    }
+
+    await bot.sendMessage(chatId, text, { parse_mode: 'MarkdownV2' });
   }
 
   async function sendStatus(chatId) {
@@ -268,6 +376,12 @@ function createBot() {
     const text = msg.text.trim();
     const lower = text.toLowerCase();
 
+    // Track every user who talks to the bot, for the admin /customers view.
+    // Best-effort — never let a tracking failure block the actual command.
+    db.upsertBotUser(chatId, msg.chat.username).catch((err) =>
+      console.error('[bot-users] failed to record user:', err.message)
+    );
+
     try {
       if (lower === '/start') {
         await bot.sendMessage(
@@ -319,6 +433,11 @@ function createBot() {
         return;
       }
 
+      if (text === '⚡ Most Active' || lower === '/active') {
+        await sendActiveTraders(chatId);
+        return;
+      }
+
       if (text === '📊 Open Positions' || lower === '/positions') {
         await sendOpenPositions(chatId);
         return;
@@ -326,6 +445,15 @@ function createBot() {
 
       if (lower === '/status') {
         await sendStatus(chatId);
+        return;
+      }
+
+      if (lower === '/customers') {
+        if (!ADMIN_CHAT_IDS.includes(chatId)) {
+          await bot.sendMessage(chatId, 'This command is restricted.');
+          return;
+        }
+        await sendCustomerList(chatId);
         return;
       }
 
@@ -349,8 +477,8 @@ function createBot() {
         return;
       }
     } catch (err) {
-      console.error('[message handler error]', err);
-      await bot.sendMessage(chatId, 'Something went wrong. Please try again.');
+      console.error('[message handler error]', err.message);
+      await bot.sendMessage(chatId, 'Something went wrong. Please try again.').catch(() => {});
     }
   });
 
@@ -422,6 +550,12 @@ function createBot() {
         return;
       }
 
+      if (data === 'show_active' || data === 'refresh_active') {
+        await bot.answerCallbackQuery(query.id);
+        await sendActiveTraders(chatId);
+        return;
+      }
+
       if (data === 'refresh_positions') {
         await bot.answerCallbackQuery(query.id);
         await sendOpenPositions(chatId);
@@ -435,7 +569,7 @@ function createBot() {
       }
 
       if (data === 'follow_all_top') {
-        const traders = await db.getActiveTraders();
+        const traders = await db.getActiveTradersByPool('quality');
         if (!traders.length) {
           await bot.answerCallbackQuery(query.id, { text: 'No traders available' });
           return;
@@ -453,9 +587,32 @@ function createBot() {
         );
         return;
       }
+
+      if (data === 'follow_all_active') {
+        const traders = await db.getActiveTradersByPool('activity');
+        if (!traders.length) {
+          await bot.answerCallbackQuery(query.id, { text: 'No active traders available' });
+          return;
+        }
+
+        for (const t of traders) {
+          await db.followTrader(chatId, t.address);
+        }
+
+        await bot.answerCallbackQuery(query.id, { text: `Following ${traders.length} active traders!` });
+        await bot.sendMessage(
+          chatId,
+          `✅ You are now following all *${traders.length}* active traders\\.\n\nExpect frequent alerts\\.`,
+          { parse_mode: 'MarkdownV2' }
+        );
+        return;
+      }
     } catch (err) {
-      console.error('[callback error]', err);
-      await bot.answerCallbackQuery(query.id, { text: 'Error occurred' });
+      console.error('[callback error]', err.message);
+      // If the query already expired, this recovery call will fail the same
+      // way — swallow it instead of letting an unhandled rejection crash
+      // the whole process.
+      await bot.answerCallbackQuery(query.id, { text: 'Error occurred' }).catch(() => {});
     }
   });
 
