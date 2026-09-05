@@ -60,3 +60,19 @@ create index if not exists idx_subscriptions_coin on subscriptions (coin);
 create index if not exists idx_trader_subscriptions_trader on trader_subscriptions (trader_address);
 create index if not exists idx_traders_active on traders (active) where active = true;
 create index if not exists idx_traders_pool on traders (pool);
+
+-- One row per Telegram chat that has ever started the bot — used for the
+-- admin /customers command. Independent of what they follow.
+create table if not exists bot_users (
+  chat_id    bigint primary key,
+  username   text,
+  first_seen timestamptz default now(),
+  last_seen  timestamptz default now()
+);
+
+-- Force PostgREST to pick up the schema changes above immediately.
+-- Without this, Supabase's API layer can keep serving a stale cached
+-- schema for a few minutes after a DDL change, causing "Could not find
+-- the 'X' column of 'Y' in the schema cache" errors even though the
+-- column now exists.
+notify pgrst, 'reload schema';
