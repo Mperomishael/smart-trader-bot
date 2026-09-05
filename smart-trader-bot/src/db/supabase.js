@@ -173,6 +173,31 @@ async function pruneOldFills(olderThanHours = 48) {
   await supabase.from('seen_fills').delete().lt('seen_at', cutoff);
 }
 
+async function upsertBotUser(chatId, username) {
+  const { error } = await supabase
+    .from('bot_users')
+    .upsert(
+      { chat_id: chatId, username: username || null, last_seen: new Date().toISOString() },
+      { onConflict: 'chat_id' }
+    );
+  if (error) throw error;
+}
+
+async function getAllBotUsers() {
+  const { data, error } = await supabase
+    .from('bot_users')
+    .select('*')
+    .order('first_seen', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function countBotUsers() {
+  const { count, error } = await supabase.from('bot_users').select('*', { count: 'exact', head: true });
+  if (error) throw error;
+  return count || 0;
+}
+
 module.exports = {
   supabase,
   upsertTraders,
@@ -195,4 +220,7 @@ module.exports = {
   isFillSeen,
   markFillSeen,
   pruneOldFills,
+  upsertBotUser,
+  getAllBotUsers,
+  countBotUsers,
 };
