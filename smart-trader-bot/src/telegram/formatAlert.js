@@ -84,5 +84,6 @@ module.exports = {
   formatCloseAlert,
   fmtUsd,
   fmtPrice,
+  formatDuration,
   escapeMarkdownV2,
 };
