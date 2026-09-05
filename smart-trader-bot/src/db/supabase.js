@@ -118,6 +118,15 @@ async function getOpenPosition(traderAddress, coin) {
   return data;
 }
 
+async function getAllOpenPositions() {
+  const { data, error } = await supabase
+    .from('open_positions')
+    .select('*')
+    .order('opened_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
 async function upsertOpenPosition(pos) {
   const { error } = await supabase
     .from('open_positions')
@@ -169,6 +178,7 @@ module.exports = {
   getFollowedTraders,
   getSubscribersForTrader,
   getOpenPosition,
+  getAllOpenPositions,
   upsertOpenPosition,
   clearOpenPosition,
   isFillSeen,
